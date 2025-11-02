@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lecture, LectureType } from '@/types';
+import { Lecture, LectureType, Attachment } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Dialog,
@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -20,6 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { HexColorPicker } from 'react-colorful';
+import { Paperclip, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface LectureDialogProps {
   open: boolean;
@@ -43,8 +44,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     startTime: '09:00',
     endTime: '10:00',
     color: '#3b82f6',
-    notificationEnabled: true,
-    notificationMinutes: 15,
+    attachments: [],
   });
 
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -60,11 +60,38 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
         startTime: '09:00',
         endTime: '10:00',
         color: '#3b82f6',
-        notificationEnabled: true,
-        notificationMinutes: 15,
+        attachments: [],
       });
     }
   }, [lecture, open]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newAttachment: Attachment = {
+          name: file.name,
+          data: event.target?.result as string,
+          type: file.type,
+        };
+        setFormData(prev => ({
+          ...prev,
+          attachments: [...(prev.attachments || []), newAttachment],
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeAttachment = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      attachments: prev.attachments?.filter((_, i) => i !== index) || [],
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,8 +103,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       startTime: formData.startTime || '09:00',
       endTime: formData.endTime || '10:00',
       color: formData.color || (formData.type === 'section' ? '#22c55e' : '#3b82f6'),
-      notificationEnabled: formData.notificationEnabled ?? true,
-      notificationMinutes: formData.notificationMinutes || 15,
+      attachments: formData.attachments || [],
     };
     onSave(lectureData);
   };
@@ -198,36 +224,49 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
             )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="notification">{t('notification')}</Label>
-            <Switch
-              id="notification"
-              checked={formData.notificationEnabled}
-              onCheckedChange={checked =>
-                setFormData({ ...formData, notificationEnabled: checked })
-              }
-            />
-          </div>
-
-          {formData.notificationEnabled && (
+          <div className="space-y-2">
+            <Label>{t('attachments')}</Label>
             <div className="space-y-2">
-              <Label htmlFor="notifyBefore">{t('notifyBefore')}</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="notifyBefore"
-                  type="number"
-                  min="5"
-                  max="120"
-                  value={formData.notificationMinutes}
-                  onChange={e =>
-                    setFormData({ ...formData, notificationMinutes: parseInt(e.target.value) })
-                  }
-                  className="w-24"
-                />
-                <span className="text-sm text-muted-foreground">{t('minutes')}</span>
-              </div>
+              <Input
+                type="file"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+                id="file-upload"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => document.getElementById('file-upload')?.click()}
+              >
+                <Paperclip className="w-4 h-4 mr-2" />
+                {t('addAttachment')}
+              </Button>
+              
+              {formData.attachments && formData.attachments.length > 0 && (
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {formData.attachments.map((attachment, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                    >
+                      <span className="truncate flex-1">{attachment.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => removeAttachment(index)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

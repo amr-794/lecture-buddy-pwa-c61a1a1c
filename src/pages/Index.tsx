@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Lecture } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { saveLectures, loadLectures } from '@/utils/storage';
-import { requestNotificationPermission, scheduleNotification } from '@/utils/notifications';
 import WeeklySchedule from '@/components/WeeklySchedule';
 import LectureDialog from '@/components/LectureDialog';
 import LectureDetailsDialog from '@/components/LectureDetailsDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings as SettingsIcon } from 'lucide-react';
+import { Plus, Settings as SettingsIcon, Facebook, Instagram, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -23,7 +22,6 @@ const Index = () => {
   useEffect(() => {
     const loadedLectures = loadLectures();
     setLectures(loadedLectures);
-    requestNotificationPermission();
 
     // Load theme
     const theme = localStorage.getItem('theme');
@@ -45,7 +43,6 @@ const Index = () => {
 
     setLectures(updatedLectures);
     saveLectures(updatedLectures);
-    scheduleNotification(lecture);
     setDialogOpen(false);
     setEditingLecture(null);
   };
@@ -80,44 +77,45 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-primary/5">
-      <div className="container mx-auto p-4 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 pb-20">
+      <div className="container mx-auto p-3 sm:p-4 max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 animate-slide-up">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6 animate-slide-up">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               {t('appTitle')}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">{t('schedule')}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">{t('schedule')}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <Button
               onClick={handleAddNew}
-              className="rounded-full shadow-lg hover:shadow-xl transition-all"
+              className="flex-1 sm:flex-none rounded-full shadow-lg hover:shadow-xl transition-all text-sm sm:text-base"
+              size="sm"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
               {t('addLecture')}
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={() => navigate('/settings')}
-              className="rounded-full"
+              className="rounded-full h-9 w-9 sm:h-10 sm:w-10"
             >
-              <SettingsIcon className="w-5 h-5" />
+              <SettingsIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
         </div>
 
         {/* Schedule */}
-        <div className="bg-card rounded-2xl shadow-xl p-6 animate-fade-in">
+        <div className="bg-card rounded-xl sm:rounded-2xl shadow-xl p-3 sm:p-6 animate-fade-in mb-4">
           {lectures.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4">📚</div>
-              <h3 className="text-xl font-semibold mb-2">
+            <div className="text-center py-12 sm:py-16">
+              <div className="text-4xl sm:text-6xl mb-4">📚</div>
+              <h3 className="text-lg sm:text-xl font-semibold mb-2">
                 {t('language') === 'ar' ? 'لا توجد محاضرات بعد' : 'No lectures yet'}
               </h3>
-              <p className="text-muted-foreground mb-6">
+              <p className="text-sm sm:text-base text-muted-foreground mb-6">
                 {t('language') === 'ar'
                   ? 'ابدأ بإضافة محاضراتك للحصول على جدول منظم'
                   : 'Start by adding your lectures to create an organized schedule'}
@@ -130,6 +128,50 @@ const Index = () => {
           ) : (
             <WeeklySchedule lectures={lectures} onLectureClick={handleLectureClick} />
           )}
+        </div>
+
+        {/* Footer - Social Links */}
+        <div className="bg-card rounded-xl shadow-lg p-4 sm:p-6 animate-fade-in">
+          <div className="flex justify-center gap-4 sm:gap-6 mb-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+              onClick={() => window.open('https://www.facebook.com/qr?id=61551830860947', '_blank')}
+            >
+              <Facebook className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+              onClick={() => window.open('https://www.instagram.com/amr_abdelhady_7_9_4?igsh=amk4ZWFqdjlqdmcz', '_blank')}
+            >
+              <Instagram className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+              onClick={() => window.open('http://amrabdelhady.free.nf', '_blank')}
+            >
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+              onClick={() => window.open('https://amr-794.github.io/AmrAbdelhady', '_blank')}
+            >
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+          </div>
+          <div className="text-center text-xs sm:text-sm text-muted-foreground">
+            <p>
+              {t('madeBy')}{' '}
+              <span className="font-semibold text-foreground">{t('amrAbdelHadi')}</span>
+            </p>
+          </div>
         </div>
       </div>
 

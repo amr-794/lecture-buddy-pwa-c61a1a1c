@@ -1,5 +1,11 @@
 export type LectureType = 'lecture' | 'section';
 
+export interface Attachment {
+  name: string;
+  data: string; // base64 or URL
+  type: string; // MIME type
+}
+
 export interface Lecture {
   id: string;
   name: string;
@@ -8,8 +14,7 @@ export interface Lecture {
   startTime: string; // HH:mm format
   endTime: string; // HH:mm format
   color: string;
-  notificationEnabled: boolean;
-  notificationMinutes: number; // minutes before lecture
+  attachments?: Attachment[];
 }
 
 export interface Settings {

@@ -10,7 +10,7 @@ interface LanguageContextType {
 
 const translations = {
   ar: {
-    appTitle: 'منبه المحاضرات',
+    appTitle: 'My Sections',
     addLecture: 'إضافة محاضرة/سيكشن',
     settings: 'الإعدادات',
     schedule: 'الجدول الأسبوعي',
@@ -54,9 +54,15 @@ const translations = {
     amrAbdelHadi: 'عمرو عبد الهادي',
     lectureDetails: 'تفاصيل المحاضرة',
     installApp: 'تثبيت التطبيق',
+    attachments: 'المرفقات',
+    addAttachment: 'إضافة مرفق',
+    exportData: 'تصدير البيانات',
+    importData: 'استيراد البيانات',
+    importWarning: 'سيتم حذف جميع البيانات الحالية!',
+    confirmImport: 'هل أنت متأكد؟',
   },
   en: {
-    appTitle: 'College Alarm',
+    appTitle: 'My Sections',
     addLecture: 'Add Lecture/Section',
     settings: 'Settings',
     schedule: 'Weekly Schedule',
@@ -100,6 +106,12 @@ const translations = {
     amrAbdelHadi: 'Amr Abdel Hadi',
     lectureDetails: 'Lecture Details',
     installApp: 'Install App',
+    attachments: 'Attachments',
+    addAttachment: 'Add Attachment',
+    exportData: 'Export Data',
+    importData: 'Import Data',
+    importWarning: 'All current data will be deleted!',
+    confirmImport: 'Are you sure?',
   },
 };
 

@@ -1,7 +1,7 @@
 {
-  "name": "منبه المحاضرات - College Alarm",
-  "short_name": "منبه المحاضرات",
-  "description": "تطبيق منبه المحاضرات للكلية - نظام تنبيه وإدارة مواعيد المحاضرات والسيكشنات",
+  "name": "My Sections",
+  "short_name": "My Sections",
+  "description": "My Sections - Lecture Schedule Manager",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
