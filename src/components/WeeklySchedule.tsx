@@ -1,0 +1,104 @@
+import React from 'react';
+import { Lecture } from '@/types';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Card } from '@/components/ui/card';
+
+interface WeeklyScheduleProps {
+  lectures: Lecture[];
+  onLectureClick: (lecture: Lecture) => void;
+}
+
+const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClick }) => {
+  const { t, language } = useLanguage();
+
+  const days = [
+    { key: 'sun', full: 'sunday' },
+    { key: 'mon', full: 'monday' },
+    { key: 'tue', full: 'tuesday' },
+    { key: 'wed', full: 'wednesday' },
+    { key: 'thu', full: 'thursday' },
+    { key: 'fri', full: 'friday' },
+    { key: 'sat', full: 'saturday' },
+  ];
+
+  const timeSlots = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM
+
+  const getLecturesForDayAndHour = (day: number, hour: number): Lecture[] => {
+    return lectures.filter(lecture => {
+      const [startHour] = lecture.startTime.split(':').map(Number);
+      return lecture.day === day && startHour === hour;
+    });
+  };
+
+  const getLectureHeight = (lecture: Lecture): number => {
+    const [startHour, startMinute] = lecture.startTime.split(':').map(Number);
+    const [endHour, endMinute] = lecture.endTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    const duration = endMinutes - startMinutes;
+    return (duration / 60) * 60; // 60px per hour
+  };
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[800px]">
+        {/* Header with days */}
+        <div className="grid grid-cols-8 gap-2 mb-2">
+          <div className="h-12 flex items-center justify-center font-semibold text-sm">
+            {t('day')}
+          </div>
+          {days.map((day, index) => (
+            <div
+              key={day.key}
+              className="h-12 flex items-center justify-center font-semibold text-sm bg-primary/10 rounded-lg"
+            >
+              {t(day.key)}
+            </div>
+          ))}
+        </div>
+
+        {/* Time slots and lectures */}
+        <div className="space-y-1">
+          {timeSlots.map(hour => (
+            <div key={hour} className="grid grid-cols-8 gap-2">
+              <div className="h-16 flex items-center justify-center text-xs text-muted-foreground">
+                {hour.toString().padStart(2, '0')}:00
+              </div>
+              {days.map((day, dayIndex) => {
+                const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
+                return (
+                  <div key={`${day.key}-${hour}`} className="relative h-16">
+                    <div className="absolute inset-0 border border-border/50 rounded-lg bg-card/30" />
+                    {dayLectures.map(lecture => (
+                      <Card
+                        key={lecture.id}
+                        className="absolute inset-x-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
+                        style={{
+                          backgroundColor: lecture.color,
+                          height: `${getLectureHeight(lecture)}px`,
+                          minHeight: '60px',
+                        }}
+                        onClick={() => onLectureClick(lecture)}
+                      >
+                        <div className="p-2 h-full flex flex-col justify-center items-center text-white">
+                          <p className="text-xs font-semibold text-center line-clamp-2">
+                            {lecture.name}
+                          </p>
+                          <p className="text-[10px] opacity-90 mt-1">
+                            {lecture.startTime}
+                          </p>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WeeklySchedule;
