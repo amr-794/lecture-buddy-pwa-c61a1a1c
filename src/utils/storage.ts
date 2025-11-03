@@ -24,3 +24,15 @@ export const loadSettings = (): Settings => {
     notificationSound: 'default',
   };
 };
+
+export const saveProfileImage = (imageData: string): void => {
+  localStorage.setItem('profileImage', imageData);
+};
+
+export const loadProfileImage = (): string | null => {
+  return localStorage.getItem('profileImage');
+};
+
+export const deleteProfileImage = (): void => {
+  localStorage.removeItem('profileImage');
+};

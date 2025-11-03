@@ -42,34 +42,34 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
   return (
     <div className="w-full overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
       <div className="min-w-[700px] sm:min-w-[800px]">
-        {/* Header with days */}
+        {/* Header with time slots */}
         <div className="grid grid-cols-8 gap-1 sm:gap-2 mb-2">
           <div className="h-8 sm:h-12 flex items-center justify-center font-semibold text-[10px] sm:text-sm">
             {t('day')}
           </div>
-          {days.map((day, index) => (
+          {timeSlots.map(hour => (
             <div
-              key={day.key}
+              key={hour}
               className="h-8 sm:h-12 flex items-center justify-center font-semibold text-[10px] sm:text-sm bg-primary/10 rounded-lg"
             >
-              {t(day.key)}
+              {hour.toString().padStart(2, '0')}:00
             </div>
           ))}
         </div>
 
-        {/* Time slots and lectures */}
+        {/* Days and lectures */}
         <div className="space-y-1">
-          {timeSlots.map(hour => (
-            <div key={hour} className="grid grid-cols-8 gap-1 sm:gap-2">
-              <div className="h-12 sm:h-16 flex items-center justify-center text-[10px] sm:text-xs text-muted-foreground">
-                {hour.toString().padStart(2, '0')}:00
+          {days.map((day, dayIndex) => (
+            <div key={day.key} className="grid grid-cols-8 gap-1 sm:gap-2">
+              <div className="h-12 sm:h-16 flex items-center justify-center text-[10px] sm:text-xs text-muted-foreground font-semibold">
+                {t(day.key)}
               </div>
-              {days.map((day, dayIndex) => {
+              {timeSlots.map(hour => {
                 const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
                 return (
                   <div key={`${day.key}-${hour}`} className="relative h-12 sm:h-16">
                     <div className="absolute inset-0 border border-border/50 rounded-lg bg-card/30" />
-                    {dayLectures.map(lecture => (
+                    {dayLectures.map((lecture, lectureIndex) => (
                       <Card
                         key={lecture.id}
                         className="absolute inset-x-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
@@ -77,6 +77,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
                           backgroundColor: lecture.color,
                           height: `${getLectureHeight(lecture)}px`,
                           minHeight: '48px',
+                          zIndex: 10 + lectureIndex,
                         }}
                         onClick={() => onLectureClick(lecture)}
                       >

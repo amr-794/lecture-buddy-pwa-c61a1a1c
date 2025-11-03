@@ -11,9 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload } from 'lucide-react';
+import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { loadLectures, saveLectures } from '@/utils/storage';
+import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage } from '@/utils/storage';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const Settings: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
@@ -32,10 +33,14 @@ const Settings: React.FC = () => {
   const [darkMode, setDarkMode] = React.useState(false);
   const [showImportAlert, setShowImportAlert] = React.useState(false);
   const [importedData, setImportedData] = React.useState<any>(null);
+  const [profileImage, setProfileImage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
     setDarkMode(isDark);
+    
+    const savedProfileImage = loadProfileImage();
+    setProfileImage(savedProfileImage);
   }, []);
 
   const toggleDarkMode = (checked: boolean) => {
@@ -93,6 +98,26 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleProfileImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageData = reader.result as string;
+        setProfileImage(imageData);
+        saveProfileImage(imageData);
+        toast.success(t('language') === 'ar' ? 'تم تحديث الصورة الشخصية' : 'Profile image updated');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDeleteProfileImage = () => {
+    setProfileImage(null);
+    deleteProfileImage();
+    toast.success(t('language') === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile image deleted');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 p-3 sm:p-4">
       <div className="max-w-2xl mx-auto">
@@ -111,6 +136,52 @@ const Settings: React.FC = () => {
         <div className="space-y-3 sm:space-y-4">
           <Card className="shadow-lg animate-slide-up">
             <CardHeader>
+              <CardTitle className="text-base sm:text-lg">
+                {t('language') === 'ar' ? 'الصورة الشخصية' : 'Profile Image'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center gap-4">
+                <Avatar className="w-32 h-32 sm:w-40 sm:h-40">
+                  <AvatarImage src={profileImage || undefined} alt="Profile" />
+                  <AvatarFallback className="bg-primary/10">
+                    <User className="w-16 h-16 text-muted-foreground" />
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex gap-2 w-full justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 max-w-xs"
+                    onClick={() => document.getElementById('profile-upload')?.click()}
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    {t('language') === 'ar' ? 'تحميل صورة' : 'Upload Image'}
+                  </Button>
+                  <input
+                    id="profile-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleProfileImageUpload}
+                  />
+                  {profileImage && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteProfileImage}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <CardHeader>
               <CardTitle className="text-base sm:text-lg">{t('language')}</CardTitle>
             </CardHeader>
             <CardContent>
@@ -126,7 +197,7 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">{t('themeSettings')}</CardTitle>
             </CardHeader>
@@ -142,7 +213,7 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.3s' }}>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">
                 {t('language') === 'ar' ? 'إدارة البيانات' : 'Data Management'}
@@ -168,7 +239,7 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.3s' }}>
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.4s' }}>
             <CardContent className="pt-4 sm:pt-6">
               <div className="flex justify-center gap-4 sm:gap-6 mb-4">
                 <Button
