@@ -21,7 +21,14 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
     { key: 'sat', full: 'saturday' },
   ];
 
-  const timeSlots = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM
+  const timeSlots = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM (7-20)
+
+  const formatTime = (hour: number): string => {
+    if (hour === 0) return '12 AM';
+    if (hour === 12) return '12 PM';
+    if (hour < 12) return `${hour} AM`;
+    return `${hour - 12} PM`;
+  };
 
   const getLecturesForDayAndHour = (day: number, hour: number): Lecture[] => {
     return lectures.filter(lecture => {
@@ -40,57 +47,63 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
   };
 
   return (
-    <div className="w-full overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-      <div className="min-w-[700px] sm:min-w-[800px]">
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[800px]">
         {/* Header with time slots */}
-        <div className="grid grid-cols-8 gap-1 sm:gap-2 mb-2">
-          <div className="h-8 sm:h-12 flex items-center justify-center font-semibold text-[10px] sm:text-sm">
-            {t('day')}
-          </div>
-          {timeSlots.map(hour => (
-            <div
-              key={hour}
-              className="h-8 sm:h-12 flex items-center justify-center font-semibold text-[10px] sm:text-sm bg-primary/10 rounded-lg"
-            >
-              {hour.toString().padStart(2, '0')}:00
+        <div className="mb-2">
+          <div className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
+            <div className="h-12 flex items-center justify-center font-semibold text-sm">
+              {t('day')}
             </div>
-          ))}
+            {timeSlots.map(hour => (
+              <div
+                key={hour}
+                className="h-12 flex items-center justify-center font-semibold text-[10px] bg-primary/10 rounded-lg"
+              >
+                {formatTime(hour)}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Days and lectures */}
         <div className="space-y-1">
           {days.map((day, dayIndex) => (
-            <div key={day.key} className="grid grid-cols-8 gap-1 sm:gap-2">
-              <div className="h-12 sm:h-16 flex items-center justify-center text-[10px] sm:text-xs text-muted-foreground font-semibold">
+            <div key={day.key} className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
+              <div className="h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg">
                 {t(day.key)}
               </div>
               {timeSlots.map(hour => {
                 const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
                 return (
-                  <div key={`${day.key}-${hour}`} className="relative h-12 sm:h-16">
+                  <div key={`${day.key}-${hour}`} className="relative h-16">
                     <div className="absolute inset-0 border border-border/50 rounded-lg bg-card/30" />
-                    {dayLectures.map((lecture, lectureIndex) => (
-                      <Card
-                        key={lecture.id}
-                        className="absolute inset-x-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
-                        style={{
-                          backgroundColor: lecture.color,
-                          height: `${getLectureHeight(lecture)}px`,
-                          minHeight: '48px',
-                          zIndex: 10 + lectureIndex,
-                        }}
-                        onClick={() => onLectureClick(lecture)}
-                      >
-                        <div className="p-1 sm:p-2 h-full flex flex-col justify-center items-center text-white">
-                          <p className="text-[10px] sm:text-xs font-semibold text-center line-clamp-2">
-                            {lecture.name}
-                          </p>
-                          <p className="text-[8px] sm:text-[10px] opacity-90 mt-0.5 sm:mt-1">
-                            {lecture.startTime}
-                          </p>
-                        </div>
-                      </Card>
-                    ))}
+                    {dayLectures.map((lecture, lectureIndex) => {
+                      const [startHour, startMinute] = lecture.startTime.split(':').map(Number);
+                      const [endHour, endMinute] = lecture.endTime.split(':').map(Number);
+                      const durationInHours = (endHour * 60 + endMinute - startHour * 60 - startMinute) / 60;
+                      const gridColumnSpan = Math.ceil(durationInHours);
+                      
+                      return (
+                        <Card
+                          key={lecture.id}
+                          className="absolute inset-y-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
+                          style={{
+                            backgroundColor: lecture.color,
+                            left: 0,
+                            right: `${-100 * (gridColumnSpan - 1)}%`,
+                            zIndex: 50 + lectureIndex,
+                          }}
+                          onClick={() => onLectureClick(lecture)}
+                        >
+                          <div className="p-2 h-full flex flex-col justify-center items-center text-white">
+                            <p className="text-[10px] font-semibold text-center line-clamp-2">
+                              {lecture.name}
+                            </p>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 );
               })}

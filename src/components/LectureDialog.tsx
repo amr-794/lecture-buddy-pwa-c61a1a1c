@@ -27,6 +27,7 @@ interface LectureDialogProps {
   onOpenChange: (open: boolean) => void;
   lecture: Lecture | null;
   onSave: (lecture: Lecture) => void;
+  existingLectures: Lecture[];
 }
 
 const LectureDialog: React.FC<LectureDialogProps> = ({
@@ -34,8 +35,9 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
   onOpenChange,
   lecture,
   onSave,
+  existingLectures,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [formData, setFormData] = useState<Partial<Lecture>>({
     name: '',
@@ -93,8 +95,55 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     }));
   };
 
+  const checkTimeConflict = (day: number, startTime: string, endTime: string): boolean => {
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    const newStart = startHour * 60 + startMinute;
+    const newEnd = endHour * 60 + endMinute;
+
+    return existingLectures.some(existingLecture => {
+      // Skip if it's the same lecture being edited
+      if (lecture && existingLecture.id === lecture.id) return false;
+      
+      // Check if same day
+      if (existingLecture.day !== day) return false;
+
+      const [exStartHour, exStartMinute] = existingLecture.startTime.split(':').map(Number);
+      const [exEndHour, exEndMinute] = existingLecture.endTime.split(':').map(Number);
+      const exStart = exStartHour * 60 + exStartMinute;
+      const exEnd = exEndHour * 60 + exEndMinute;
+
+      // Check for overlap
+      return (newStart < exEnd && newEnd > exStart);
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate time range (7 AM to 8 PM)
+    const [startHour] = (formData.startTime || '09:00').split(':').map(Number);
+    const [endHour] = (formData.endTime || '10:00').split(':').map(Number);
+    
+    if (startHour < 7 || endHour > 20 || startHour >= endHour) {
+      toast.error(
+        language === 'ar'
+          ? 'الوقت يجب أن يكون بين 7 صباحاً و 8 مساءً'
+          : 'Time must be between 7 AM and 8 PM'
+      );
+      return;
+    }
+
+    // Check for time conflict
+    if (checkTimeConflict(formData.day || 0, formData.startTime || '09:00', formData.endTime || '10:00')) {
+      toast.error(
+        language === 'ar'
+          ? 'يوجد تعارض مع محاضرة أخرى في نفس الوقت'
+          : 'There is a conflict with another lecture at the same time'
+      );
+      return;
+    }
+
     const lectureData: Lecture = {
       id: lecture?.id || Date.now().toString(),
       name: formData.name || '',

@@ -201,6 +201,7 @@ const Index = () => {
         onOpenChange={setDialogOpen}
         lecture={editingLecture}
         onSave={handleSaveLecture}
+        existingLectures={lectures}
       />
 
       <LectureDetailsDialog
