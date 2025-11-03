@@ -52,7 +52,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
         {/* Header with time slots */}
         <div className="mb-2">
           <div className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
-            <div className="h-12 flex items-center justify-center font-semibold text-sm">
+            <div 
+              className={`h-12 flex items-center justify-center font-semibold text-sm bg-background z-20 ${
+                language === 'ar' ? 'sticky right-0' : 'sticky left-0'
+              }`}
+            >
               {t('day')}
             </div>
             {timeSlots.map(hour => (
@@ -70,7 +74,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
         <div className="space-y-1">
           {days.map((day, dayIndex) => (
             <div key={day.key} className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
-              <div className="h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg">
+              <div 
+                className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-20 ${
+                  language === 'ar' ? 'sticky right-0' : 'sticky left-0'
+                }`}
+              >
                 {t(day.key)}
               </div>
               {timeSlots.map(hour => {
