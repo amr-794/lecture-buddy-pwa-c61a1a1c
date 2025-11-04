@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download } from 'lucide-react';
+import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink } from 'lucide-react';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -37,6 +37,10 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
     link.href = attachment.data;
     link.download = attachment.name;
     link.click();
+  };
+
+  const openAttachment = (attachment: Attachment) => {
+    window.open(attachment.data, '_blank');
   };
 
   return (
@@ -116,18 +120,29 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                   {lecture.attachments.map((attachment, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors"
+                      className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors"
                     >
                       <span className="truncate flex-1">{attachment.name}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => downloadAttachment(attachment)}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openAttachment(attachment)}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => downloadAttachment(attachment)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -53,7 +53,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
         <div className="mb-2">
           <div className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
             <div 
-              className={`h-12 flex items-center justify-center font-semibold text-sm bg-background z-20 ${
+              className={`h-12 flex items-center justify-center font-semibold text-sm bg-background z-50 ${
                 language === 'ar' ? 'sticky right-0' : 'sticky left-0'
               }`}
             >
@@ -75,7 +75,7 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
           {days.map((day, dayIndex) => (
             <div key={day.key} className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
               <div 
-                className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-20 ${
+                className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-50 ${
                   language === 'ar' ? 'sticky right-0' : 'sticky left-0'
                 }`}
               >
@@ -98,9 +98,11 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
                           className="absolute inset-y-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
                           style={{
                             backgroundColor: lecture.color,
-                            left: 0,
-                            right: `${-100 * (gridColumnSpan - 1)}%`,
-                            zIndex: 50 + lectureIndex,
+                            ...(language === 'ar' 
+                              ? { right: 0, left: `${-100 * (gridColumnSpan - 1)}%` }
+                              : { left: 0, right: `${-100 * (gridColumnSpan - 1)}%` }
+                            ),
+                            zIndex: 10 + lectureIndex,
                           }}
                           onClick={() => onLectureClick(lecture)}
                         >
