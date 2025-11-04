@@ -40,12 +40,42 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
   };
 
   const openAttachment = (attachment: Attachment) => {
-    window.open(attachment.data, '_blank');
+    // Create a temporary link to open the file in the appropriate app
+    const link = document.createElement('a');
+    link.href = attachment.data;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    
+    // Set the correct MIME type if available
+    if (attachment.type) {
+      const blob = dataURLtoBlob(attachment.data);
+      const blobUrl = URL.createObjectURL(blob);
+      link.href = blobUrl;
+      
+      // Clean up the blob URL after opening
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+    }
+    
+    link.click();
+  };
+
+  // Helper function to convert data URL to Blob
+  const dataURLtoBlob = (dataUrl: string): Blob => {
+    const arr = dataUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] animate-slide-up max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[400px] max-w-[95vw] animate-slide-up max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('lectureDetails')}</DialogTitle>
         </DialogHeader>

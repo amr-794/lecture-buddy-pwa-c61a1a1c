@@ -36,6 +36,15 @@ const Index = () => {
     // Load profile image
     const savedProfileImage = loadProfileImage();
     setProfileImage(savedProfileImage);
+
+    // Update profile image when window gains focus (when returning from settings)
+    const handleFocus = () => {
+      const updatedProfileImage = loadProfileImage();
+      setProfileImage(updatedProfileImage);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   const handleSaveLecture = (lecture: Lecture) => {

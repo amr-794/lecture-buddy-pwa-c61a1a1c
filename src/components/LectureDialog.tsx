@@ -169,7 +169,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] animate-slide-up">
+      <DialogContent className="sm:max-w-[500px] max-w-[95vw] animate-slide-up max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {lecture ? t('edit') : t('addLecture')}
