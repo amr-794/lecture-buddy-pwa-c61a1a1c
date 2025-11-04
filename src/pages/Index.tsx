@@ -33,6 +33,12 @@ const Index = () => {
       document.documentElement.classList.add('dark');
     }
 
+    // Load app theme
+    const appTheme = localStorage.getItem('appTheme');
+    if (appTheme && appTheme !== 'default') {
+      document.documentElement.setAttribute('data-theme', appTheme);
+    }
+
     // Load profile image
     const savedProfileImage = loadProfileImage();
     setProfileImage(savedProfileImage);
@@ -43,8 +49,22 @@ const Index = () => {
       setProfileImage(updatedProfileImage);
     };
 
+    // Listen for profile image updates (for PWA)
+    const handleProfileImageUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.type === 'profileImageUpdated') {
+        const updatedImage = loadProfileImage();
+        setProfileImage(updatedImage);
+      }
+    };
+
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener('profileImageUpdate', handleProfileImageUpdate);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('profileImageUpdate', handleProfileImageUpdate);
+    };
   }, []);
 
   const handleSaveLecture = (lecture: Lecture) => {

@@ -90,6 +90,96 @@ All colors MUST be HSL.
     --shadow-card: 0 4px 20px -2px hsl(0 0% 0% / 0.3);
     --shadow-hover: 0 8px 30px -4px hsl(0 0% 0% / 0.5);
   }
+
+  /* Ocean Theme */
+  [data-theme="ocean"] {
+    --primary: 199 89% 48%;
+    --secondary: 187 71% 48%;
+    --accent: 199 89% 48%;
+    --ring: 199 89% 48%;
+  }
+
+  [data-theme="ocean"].dark {
+    --primary: 199 89% 55%;
+    --secondary: 187 71% 55%;
+    --accent: 199 89% 55%;
+    --ring: 199 89% 55%;
+  }
+
+  /* Sunset Theme */
+  [data-theme="sunset"] {
+    --primary: 14 90% 53%;
+    --secondary: 28 80% 52%;
+    --accent: 14 90% 53%;
+    --ring: 14 90% 53%;
+  }
+
+  [data-theme="sunset"].dark {
+    --primary: 14 90% 60%;
+    --secondary: 28 80% 60%;
+    --accent: 14 90% 60%;
+    --ring: 14 90% 60%;
+  }
+
+  /* Forest Theme */
+  [data-theme="forest"] {
+    --primary: 142 71% 45%;
+    --secondary: 158 64% 52%;
+    --accent: 142 71% 45%;
+    --ring: 142 71% 45%;
+  }
+
+  [data-theme="forest"].dark {
+    --primary: 142 71% 50%;
+    --secondary: 158 64% 58%;
+    --accent: 142 71% 50%;
+    --ring: 142 71% 50%;
+  }
+
+  /* Purple Theme */
+  [data-theme="purple"] {
+    --primary: 262 83% 58%;
+    --secondary: 291 64% 42%;
+    --accent: 262 83% 58%;
+    --ring: 262 83% 58%;
+  }
+
+  [data-theme="purple"].dark {
+    --primary: 262 83% 65%;
+    --secondary: 291 64% 50%;
+    --accent: 262 83% 65%;
+    --ring: 262 83% 65%;
+  }
+
+  /* Rose Theme */
+  [data-theme="rose"] {
+    --primary: 346 77% 50%;
+    --secondary: 350 89% 60%;
+    --accent: 346 77% 50%;
+    --ring: 346 77% 50%;
+  }
+
+  [data-theme="rose"].dark {
+    --primary: 346 77% 58%;
+    --secondary: 350 89% 68%;
+    --accent: 346 77% 58%;
+    --ring: 346 77% 58%;
+  }
+
+  /* Amber Theme */
+  [data-theme="amber"] {
+    --primary: 38 92% 50%;
+    --secondary: 45 93% 47%;
+    --accent: 38 92% 50%;
+    --ring: 38 92% 50%;
+  }
+
+  [data-theme="amber"].dark {
+    --primary: 38 92% 58%;
+    --secondary: 45 93% 55%;
+    --accent: 38 92% 58%;
+    --ring: 38 92% 58%;
+  }
 }
 
 @layer base {

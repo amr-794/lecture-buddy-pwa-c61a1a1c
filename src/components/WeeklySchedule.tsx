@@ -83,9 +83,14 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
               </div>
               {timeSlots.map(hour => {
                 const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
+                const isEvenRow = dayIndex % 2 === 0;
                 return (
                   <div key={`${day.key}-${hour}`} className="relative h-16">
-                    <div className="absolute inset-0 border border-border/50 rounded-lg bg-card/30" />
+                    <div className={`absolute inset-0 border border-border/50 rounded-lg ${
+                      isEvenRow 
+                        ? 'bg-card/30 dark:bg-primary/5' 
+                        : 'bg-card/50 dark:bg-secondary/5'
+                    }`} />
                     {dayLectures.map((lecture, lectureIndex) => {
                       const [startHour, startMinute] = lecture.startTime.split(':').map(Number);
                       const [endHour, endMinute] = lecture.endTime.split(':').map(Number);

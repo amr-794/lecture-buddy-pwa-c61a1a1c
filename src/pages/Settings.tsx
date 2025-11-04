@@ -34,6 +34,7 @@ const Settings: React.FC = () => {
   const [showImportAlert, setShowImportAlert] = React.useState(false);
   const [importedData, setImportedData] = React.useState<any>(null);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
+  const [currentTheme, setCurrentTheme] = React.useState<string>('default');
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -41,6 +42,35 @@ const Settings: React.FC = () => {
     
     const savedProfileImage = loadProfileImage();
     setProfileImage(savedProfileImage);
+
+    const savedTheme = localStorage.getItem('appTheme') || 'default';
+    setCurrentTheme(savedTheme);
+    if (savedTheme !== 'default') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
+    // Listen for profile image updates
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'profileImage') {
+        setProfileImage(e.newValue);
+      }
+    };
+
+    const handleCustomEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.type === 'profileImageUpdated') {
+        const updatedImage = loadProfileImage();
+        setProfileImage(updatedImage);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileImageUpdate', handleCustomEvent);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileImageUpdate', handleCustomEvent);
+    };
   }, []);
 
   const toggleDarkMode = (checked: boolean) => {
@@ -106,6 +136,12 @@ const Settings: React.FC = () => {
         const imageData = reader.result as string;
         setProfileImage(imageData);
         saveProfileImage(imageData);
+        
+        // Dispatch custom event for PWA
+        window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
+          detail: { type: 'profileImageUpdated', image: imageData } 
+        }));
+        
         toast.success(t('language') === 'ar' ? 'تم تحديث الصورة الشخصية' : 'Profile image updated');
       };
       reader.readAsDataURL(file);
@@ -115,7 +151,34 @@ const Settings: React.FC = () => {
   const handleDeleteProfileImage = () => {
     setProfileImage(null);
     deleteProfileImage();
+    
+    // Dispatch custom event for PWA
+    window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
+      detail: { type: 'profileImageUpdated', image: null } 
+    }));
+    
     toast.success(t('language') === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile image deleted');
+  };
+
+  const themes = [
+    { value: 'default', label: language === 'ar' ? 'الافتراضي - أزرق' : 'Default - Blue' },
+    { value: 'ocean', label: language === 'ar' ? 'المحيط - فيروزي' : 'Ocean - Teal' },
+    { value: 'sunset', label: language === 'ar' ? 'الغروب - برتقالي' : 'Sunset - Orange' },
+    { value: 'forest', label: language === 'ar' ? 'الغابة - أخضر' : 'Forest - Green' },
+    { value: 'purple', label: language === 'ar' ? 'البنفسجي' : 'Purple' },
+    { value: 'rose', label: language === 'ar' ? 'الوردي' : 'Rose' },
+    { value: 'amber', label: language === 'ar' ? 'العنبر - ذهبي' : 'Amber - Gold' },
+  ];
+
+  const handleThemeChange = (theme: string) => {
+    setCurrentTheme(theme);
+    localStorage.setItem('appTheme', theme);
+    
+    if (theme === 'default') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
   };
 
   return (
@@ -201,7 +264,7 @@ const Settings: React.FC = () => {
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">{t('themeSettings')}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="dark-mode" className="text-sm sm:text-base">{t('darkMode')}</Label>
                 <Switch
@@ -209,6 +272,24 @@ const Settings: React.FC = () => {
                   checked={darkMode}
                   onCheckedChange={toggleDarkMode}
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm sm:text-base">
+                  {language === 'ar' ? 'قالب الألوان' : 'Color Theme'}
+                </Label>
+                <Select value={currentTheme} onValueChange={handleThemeChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {themes.map(theme => (
+                      <SelectItem key={theme.value} value={theme.value}>
+                        {theme.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
