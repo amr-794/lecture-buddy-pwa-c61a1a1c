@@ -81,9 +81,18 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
               >
                 {t(day.key)}
               </div>
-              {timeSlots.map(hour => {
+              {timeSlots.map((hour, hourIndex) => {
                 const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
                 const isEvenRow = dayIndex % 2 === 0;
+                
+                // Check if this cell is already occupied by a lecture that started earlier
+                const isOccupied = lectures.some(lecture => {
+                  if (lecture.day !== dayIndex) return false;
+                  const [lectureStartHour] = lecture.startTime.split(':').map(Number);
+                  const [lectureEndHour] = lecture.endTime.split(':').map(Number);
+                  return lectureStartHour < hour && lectureEndHour > hour;
+                });
+                
                 return (
                   <div key={`${day.key}-${hour}`} className="relative h-16">
                     <div className={`absolute inset-0 border border-border/50 rounded-lg ${
@@ -91,29 +100,34 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
                         ? 'bg-card/30 dark:bg-primary/5' 
                         : 'bg-card/50 dark:bg-secondary/5'
                     }`} />
-                    {dayLectures.map((lecture, lectureIndex) => {
+                    {!isOccupied && dayLectures.map((lecture, lectureIndex) => {
                       const [startHour, startMinute] = lecture.startTime.split(':').map(Number);
                       const [endHour, endMinute] = lecture.endTime.split(':').map(Number);
-                      const durationInHours = (endHour * 60 + endMinute - startHour * 60 - startMinute) / 60;
-                      const gridColumnSpan = Math.ceil(durationInHours);
+                      const durationInMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+                      const durationInHours = durationInMinutes / 60;
+                      const cellsToSpan = Math.ceil(durationInHours);
                       
                       return (
                         <Card
                           key={lecture.id}
-                          className="absolute inset-y-0 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg overflow-hidden animate-slide-up"
+                          className="absolute inset-y-1 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg overflow-hidden animate-slide-up border-2 border-white/20"
                           style={{
                             backgroundColor: lecture.color,
+                            width: `calc(${cellsToSpan * 100}% + ${(cellsToSpan - 1) * 4}px)`,
                             ...(language === 'ar' 
-                              ? { right: 0, left: `${-100 * (gridColumnSpan - 1)}%` }
-                              : { left: 0, right: `${-100 * (gridColumnSpan - 1)}%` }
+                              ? { right: 0 }
+                              : { left: 0 }
                             ),
                             zIndex: 10 + lectureIndex,
                           }}
                           onClick={() => onLectureClick(lecture)}
                         >
                           <div className="p-2 h-full flex flex-col justify-center items-center text-white">
-                            <p className="text-[10px] font-semibold text-center line-clamp-2">
+                            <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
                               {lecture.name}
+                            </p>
+                            <p className="text-[8px] opacity-90 mt-0.5">
+                              {lecture.startTime} - {lecture.endTime}
                             </p>
                           </div>
                         </Card>

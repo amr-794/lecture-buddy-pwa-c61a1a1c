@@ -263,6 +263,17 @@ const Settings: React.FC = () => {
   };
 
   const deleteBackup = (backupId: string) => {
+    const backup = backups.find(b => b.id === backupId);
+    if (!backup) return;
+    
+    if (!confirm(t('confirmDeleteBackupFirst').replace('{name}', backup.name))) {
+      return;
+    }
+    
+    if (!confirm(t('confirmDeleteBackupSecond'))) {
+      return;
+    }
+    
     const updatedBackups = backups.filter(b => b.id !== backupId);
     setBackups(updatedBackups);
     saveBackups(updatedBackups);
