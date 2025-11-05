@@ -11,6 +11,16 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const Index = () => {
   const { t, language } = useLanguage();
@@ -97,13 +107,20 @@ const Index = () => {
     }
   };
 
+  const [showDeleteAlert, setShowDeleteAlert] = React.useState(false);
+
   const handleDelete = () => {
+    setShowDeleteAlert(true);
+  };
+
+  const confirmDelete = () => {
     if (selectedLecture) {
       const updatedLectures = lectures.filter(l => l.id !== selectedLecture.id);
       setLectures(updatedLectures);
       saveLectures(updatedLectures);
       setDetailsDialogOpen(false);
       setSelectedLecture(null);
+      setShowDeleteAlert(false);
       toast.success(t('language') === 'ar' ? 'تم حذف المحاضرة' : 'Lecture deleted');
     }
   };
@@ -259,6 +276,24 @@ const Index = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmDelete')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('deleteWarning')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

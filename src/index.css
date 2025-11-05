@@ -97,6 +97,9 @@ All colors MUST be HSL.
     --secondary: 187 71% 48%;
     --accent: 199 89% 48%;
     --ring: 199 89% 48%;
+    --card: 199 20% 97%;
+    --muted: 199 20% 95%;
+    --border: 199 25% 88%;
   }
 
   [data-theme="ocean"].dark {
@@ -104,6 +107,9 @@ All colors MUST be HSL.
     --secondary: 187 71% 55%;
     --accent: 199 89% 55%;
     --ring: 199 89% 55%;
+    --card: 199 25% 15%;
+    --muted: 199 25% 15%;
+    --border: 199 25% 22%;
   }
 
   /* Sunset Theme */
@@ -112,6 +118,9 @@ All colors MUST be HSL.
     --secondary: 28 80% 52%;
     --accent: 14 90% 53%;
     --ring: 14 90% 53%;
+    --card: 14 15% 97%;
+    --muted: 14 15% 95%;
+    --border: 14 20% 88%;
   }
 
   [data-theme="sunset"].dark {
@@ -119,6 +128,9 @@ All colors MUST be HSL.
     --secondary: 28 80% 60%;
     --accent: 14 90% 60%;
     --ring: 14 90% 60%;
+    --card: 14 20% 15%;
+    --muted: 14 20% 15%;
+    --border: 14 20% 22%;
   }
 
   /* Forest Theme */
@@ -127,6 +139,9 @@ All colors MUST be HSL.
     --secondary: 158 64% 52%;
     --accent: 142 71% 45%;
     --ring: 142 71% 45%;
+    --card: 142 15% 97%;
+    --muted: 142 15% 95%;
+    --border: 142 20% 88%;
   }
 
   [data-theme="forest"].dark {
@@ -134,6 +149,9 @@ All colors MUST be HSL.
     --secondary: 158 64% 58%;
     --accent: 142 71% 50%;
     --ring: 142 71% 50%;
+    --card: 142 20% 15%;
+    --muted: 142 20% 15%;
+    --border: 142 20% 22%;
   }
 
   /* Purple Theme */
@@ -142,6 +160,9 @@ All colors MUST be HSL.
     --secondary: 291 64% 42%;
     --accent: 262 83% 58%;
     --ring: 262 83% 58%;
+    --card: 262 15% 97%;
+    --muted: 262 15% 95%;
+    --border: 262 20% 88%;
   }
 
   [data-theme="purple"].dark {
@@ -149,6 +170,9 @@ All colors MUST be HSL.
     --secondary: 291 64% 50%;
     --accent: 262 83% 65%;
     --ring: 262 83% 65%;
+    --card: 262 20% 15%;
+    --muted: 262 20% 15%;
+    --border: 262 20% 22%;
   }
 
   /* Rose Theme */
@@ -157,6 +181,9 @@ All colors MUST be HSL.
     --secondary: 350 89% 60%;
     --accent: 346 77% 50%;
     --ring: 346 77% 50%;
+    --card: 346 15% 97%;
+    --muted: 346 15% 95%;
+    --border: 346 20% 88%;
   }
 
   [data-theme="rose"].dark {
@@ -164,6 +191,9 @@ All colors MUST be HSL.
     --secondary: 350 89% 68%;
     --accent: 346 77% 58%;
     --ring: 346 77% 58%;
+    --card: 346 20% 15%;
+    --muted: 346 20% 15%;
+    --border: 346 20% 22%;
   }
 
   /* Amber Theme */
@@ -172,6 +202,9 @@ All colors MUST be HSL.
     --secondary: 45 93% 47%;
     --accent: 38 92% 50%;
     --ring: 38 92% 50%;
+    --card: 38 15% 97%;
+    --muted: 38 15% 95%;
+    --border: 38 20% 88%;
   }
 
   [data-theme="amber"].dark {
@@ -179,6 +212,9 @@ All colors MUST be HSL.
     --secondary: 45 93% 55%;
     --accent: 38 92% 58%;
     --ring: 38 92% 58%;
+    --card: 38 20% 15%;
+    --muted: 38 20% 15%;
+    --border: 38 20% 22%;
   }
 }
 

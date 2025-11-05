@@ -11,9 +11,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage } from '@/utils/storage';
+import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage, loadBackups, saveBackups } from '@/utils/storage';
+import { Backup } from '@/types';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -26,6 +28,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 const Settings: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
@@ -35,6 +44,13 @@ const Settings: React.FC = () => {
   const [importedData, setImportedData] = React.useState<any>(null);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = React.useState<string>('default');
+  const [backups, setBackups] = React.useState<Backup[]>([]);
+  const [showExportDialog, setShowExportDialog] = React.useState(false);
+  const [showBackupDialog, setShowBackupDialog] = React.useState(false);
+  const [showApplyBackupAlert, setShowApplyBackupAlert] = React.useState(false);
+  const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
+  const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
+  const [editingBackupName, setEditingBackupName] = React.useState('');
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -48,6 +64,9 @@ const Settings: React.FC = () => {
     if (savedTheme !== 'default') {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
+
+    const savedBackups = loadBackups();
+    setBackups(savedBackups);
 
     // Listen for profile image updates
     const handleStorageChange = (e: StorageEvent) => {
@@ -83,9 +102,13 @@ const Settings: React.FC = () => {
     localStorage.setItem('theme', checked ? 'dark' : 'light');
   };
 
-  const handleExport = () => {
+  const handleExportWithChoice = (includeAttachments: boolean) => {
     const lectures = loadLectures();
-    const dataStr = JSON.stringify(lectures, null, 2);
+    const dataToExport = includeAttachments 
+      ? lectures 
+      : lectures.map(l => ({ ...l, attachments: [] }));
+    
+    const dataStr = JSON.stringify(dataToExport, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -93,6 +116,7 @@ const Settings: React.FC = () => {
     link.download = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    setShowExportDialog(false);
     toast.success(t('language') === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
   };
 
@@ -131,6 +155,17 @@ const Settings: React.FC = () => {
   const handleProfileImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      const MAX_IMAGE_SIZE = 100 * 1024 * 1024; // 100MB
+      
+      if (file.size > MAX_IMAGE_SIZE) {
+        toast.error(
+          language === 'ar'
+            ? 'الصورة كبيرة جداً. الحد الأقصى 100 ميجا'
+            : 'Image is too large. Maximum 100MB'
+        );
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         const imageData = reader.result as string;
@@ -179,6 +214,74 @@ const Settings: React.FC = () => {
     } else {
       document.documentElement.setAttribute('data-theme', theme);
     }
+  };
+
+  const createBackup = () => {
+    if (backups.length >= 3) {
+      toast.error(t('maxBackupsReached'));
+      return;
+    }
+
+    const lectures = loadLectures();
+    const newBackup: Backup = {
+      id: Date.now().toString(),
+      name: `${t('language') === 'ar' ? 'نسخة احتياطية' : 'Backup'} ${backups.length + 1}`,
+      date: new Date().toISOString(),
+      lectures,
+    };
+
+    const updatedBackups = [...backups, newBackup];
+    setBackups(updatedBackups);
+    saveBackups(updatedBackups);
+    toast.success(t('language') === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created');
+  };
+
+  const applyBackup = (backup: Backup) => {
+    setSelectedBackup(backup);
+    setShowApplyBackupAlert(true);
+  };
+
+  const confirmApplyBackup = () => {
+    if (selectedBackup) {
+      saveLectures(selectedBackup.lectures);
+      setShowApplyBackupAlert(false);
+      toast.success(t('language') === 'ar' ? 'تم تطبيق النسخة الاحتياطية' : 'Backup applied');
+      setTimeout(() => window.location.reload(), 500);
+    }
+  };
+
+  const shareBackup = (backup: Backup) => {
+    const dataStr = JSON.stringify(backup.lectures, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${backup.name}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(t('language') === 'ar' ? 'تم تصدير النسخة' : 'Backup exported');
+  };
+
+  const deleteBackup = (backupId: string) => {
+    const updatedBackups = backups.filter(b => b.id !== backupId);
+    setBackups(updatedBackups);
+    saveBackups(updatedBackups);
+    toast.success(t('language') === 'ar' ? 'تم حذف النسخة' : 'Backup deleted');
+  };
+
+  const startRenameBackup = (backup: Backup) => {
+    setEditingBackupId(backup.id);
+    setEditingBackupName(backup.name);
+  };
+
+  const saveBackupName = (backupId: string) => {
+    const updatedBackups = backups.map(b =>
+      b.id === backupId ? { ...b, name: editingBackupName } : b
+    );
+    setBackups(updatedBackups);
+    saveBackups(updatedBackups);
+    setEditingBackupId(null);
+    toast.success(t('language') === 'ar' ? 'تم تحديث الاسم' : 'Name updated');
   };
 
   return (
@@ -296,13 +399,106 @@ const Settings: React.FC = () => {
 
           <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.3s' }}>
             <CardHeader>
+              <CardTitle className="text-base sm:text-lg">{t('backups')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={createBackup}
+                variant="outline"
+                className="w-full justify-start text-sm sm:text-base"
+                disabled={backups.length >= 3}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {t('createBackup')} ({backups.length}/3)
+              </Button>
+
+              {backups.length > 0 && (
+                <div className="space-y-2">
+                  {backups.map(backup => (
+                    <div
+                      key={backup.id}
+                      className="p-3 bg-muted rounded-lg space-y-2"
+                    >
+                      {editingBackupId === backup.id ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={editingBackupName}
+                            onChange={e => setEditingBackupName(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => saveBackupName(backup.id)}
+                          >
+                            <Save className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingBackupId(null)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-sm">{backup.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(backup.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startRenameBackup(backup)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => applyBackup(backup)}
+                            >
+                              {t('applyBackup')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => shareBackup(backup)}
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteBackup(backup.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.4s' }}>
+            <CardHeader>
               <CardTitle className="text-base sm:text-lg">
                 {t('language') === 'ar' ? 'إدارة البيانات' : 'Data Management'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                onClick={handleExport}
+                onClick={() => setShowExportDialog(true)}
                 variant="outline"
                 className="w-full justify-start text-sm sm:text-base"
               >
@@ -320,7 +516,7 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.4s' }}>
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.5s' }}>
             <CardContent className="pt-4 sm:pt-6">
               <div className="flex justify-center gap-4 sm:gap-6 mb-4">
                 <Button
@@ -384,6 +580,49 @@ const Settings: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={showApplyBackupAlert} onOpenChange={setShowApplyBackupAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmBackupApply')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('backupWarning')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmApplyBackup}>
+              {t('applyBackup')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('exportData')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              onClick={() => handleExportWithChoice(true)}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {t('exportWithAttachments')}
+            </Button>
+            <Button
+              onClick={() => handleExportWithChoice(false)}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {t('exportWithoutAttachments')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

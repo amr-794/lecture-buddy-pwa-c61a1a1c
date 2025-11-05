@@ -71,7 +71,18 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     const files = e.target.files;
     if (!files) return;
 
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+
     Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(
+          language === 'ar'
+            ? `الملف ${file.name} كبير جداً. الحد الأقصى 100 ميجا`
+            : `File ${file.name} is too large. Maximum 100MB`
+        );
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const newAttachment: Attachment = {
@@ -256,11 +267,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
                 className="w-12 h-12 rounded-lg border-2 border-border cursor-pointer transition-transform hover:scale-110"
                 style={{ backgroundColor: formData.color }}
                 onClick={() => setShowColorPicker(!showColorPicker)}
-              />
-              <Input
-                value={formData.color}
-                onChange={e => setFormData({ ...formData, color: e.target.value })}
-                className="flex-1"
               />
             </div>
             {showColorPicker && (

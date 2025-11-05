@@ -1,7 +1,8 @@
-import { Lecture, Settings } from '@/types';
+import { Lecture, Settings, Backup } from '@/types';
 
 const LECTURES_KEY = 'college-alarm-lectures';
 const SETTINGS_KEY = 'college-alarm-settings';
+const BACKUPS_KEY = 'college-alarm-backups';
 
 export const saveLectures = (lectures: Lecture[]): void => {
   localStorage.setItem(LECTURES_KEY, JSON.stringify(lectures));
@@ -35,4 +36,14 @@ export const loadProfileImage = (): string | null => {
 
 export const deleteProfileImage = (): void => {
   localStorage.removeItem('profileImage');
+};
+
+// Backup functions
+export const saveBackups = (backups: Backup[]): void => {
+  localStorage.setItem(BACKUPS_KEY, JSON.stringify(backups));
+};
+
+export const loadBackups = (): Backup[] => {
+  const stored = localStorage.getItem(BACKUPS_KEY);
+  return stored ? JSON.parse(stored) : [];
 };

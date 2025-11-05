@@ -22,3 +22,10 @@ export interface Settings {
   theme: 'light' | 'dark';
   notificationSound: string;
 }
+
+export interface Backup {
+  id: string;
+  name: string;
+  date: string;
+  lectures: Lecture[];
+}
