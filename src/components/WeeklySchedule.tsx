@@ -74,11 +74,12 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
         <div className="space-y-1">
           {days.map((day, dayIndex) => {
             const dayLectures = lectures.filter((l) => l.day === dayIndex);
-            const startOfDay = 7 * 60; // 7:00
-            const totalMinutes = timeSlots.length * 60; // 14 hours
+            const startOfDay = 7 * 60; // 7:00 AM
+            const totalMinutes = timeSlots.length * 60; // 14 hours = 840 minutes
+            const isEvenRow = dayIndex % 2 === 0;
 
             return (
-              <div key={day.key} className={`relative grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'} items-stretch`}>
+              <div key={day.key} className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
                 {/* Day label */}
                 <div 
                   className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-50 ${
@@ -88,55 +89,80 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
                   {t(day.key)}
                 </div>
 
-                {/* Timeline background cells */}
-                {timeSlots.map((hour, idx) => {
-                  const isEvenRow = dayIndex % 2 === 0;
+                {/* Timeline background cells with lectures overlay */}
+                {timeSlots.map((hour, hourIndex) => {
+                  // Calculate which lectures appear in this hour slot
+                  const cellStartMin = hour * 60; // e.g., 7:00 = 420 min
+                  const cellEndMin = (hour + 1) * 60; // e.g., 8:00 = 480 min
+
                   return (
                     <div key={`${day.key}-${hour}`} className="relative h-16">
+                      {/* Background cell */}
                       <div className={`absolute inset-0 border border-border/50 rounded-lg ${
                         isEvenRow 
                           ? 'bg-card/30 dark:bg-primary/5' 
                           : 'bg-card/50 dark:bg-secondary/5'
                       }`} />
+                      
+                      {/* Render lectures that START in this hour */}
+                      {dayLectures
+                        .filter(lecture => {
+                          const [sh] = lecture.startTime.split(':').map(Number);
+                          return sh === hour;
+                        })
+                        .map((lecture, lectureIndex) => {
+                          const [sh, sm] = lecture.startTime.split(':').map(Number);
+                          const [eh, em] = lecture.endTime.split(':').map(Number);
+                          const startMin = sh * 60 + sm;
+                          const endMin = eh * 60 + em;
+                          const durationMin = endMin - startMin;
+
+                          // Calculate position within the entire day timeline
+                          const offsetFromDayStart = startMin - startOfDay; // minutes from 7:00
+                          const offsetFromCellStart = startMin - cellStartMin; // minutes from current hour start
+                          
+                          // Position within this cell (0-100%)
+                          const leftPctInCell = (offsetFromCellStart / 60) * 100;
+                          
+                          // Width spanning multiple cells
+                          const cellWidth = 100; // each cell is 100% of its grid column
+                          const durationInCells = durationMin / 60;
+                          const widthPct = durationInCells * cellWidth;
+                          
+                          // Calculate how many cells to span (for positioning)
+                          const gapSize = 4; // gap-1 = 4px
+                          const spanCells = Math.ceil(durationInCells);
+                          const totalWidth = `calc(${widthPct}% + ${(spanCells - 1) * gapSize}px)`;
+
+                          return (
+                            <Card
+                              key={lecture.id}
+                              className="absolute inset-y-1 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg overflow-hidden animate-slide-up border-2 border-white/20"
+                              style={{
+                                backgroundColor: lecture.color,
+                                width: totalWidth,
+                                ...(language === 'ar' 
+                                  ? { right: `${100 - leftPctInCell}%` }
+                                  : { left: `${leftPctInCell}%` }
+                                ),
+                                zIndex: 10 + lectureIndex,
+                              }}
+                              onClick={() => onLectureClick(lecture)}
+                            >
+                              <div className="p-2 h-full flex flex-col justify-center items-center text-white">
+                                <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
+                                  {lecture.name}
+                                </p>
+                                <p className="text-[8px] opacity-90 mt-0.5">
+                                  {lecture.startTime} - {lecture.endTime}
+                                </p>
+                              </div>
+                            </Card>
+                          );
+                        })}
                     </div>
                   );
                 })}
-
-                {/* Overlay container spanning all time columns */}
-                <div className="relative h-16" style={{ gridColumn: '2 / -1' }}>
-                  {dayLectures.map((lecture, lectureIndex) => {
-                    const [sh, sm] = lecture.startTime.split(':').map(Number);
-                    const [eh, em] = lecture.endTime.split(':').map(Number);
-                    const startMin = sh * 60 + sm;
-                    const endMin = eh * 60 + em;
-                    const leftPct = Math.max(0, ((startMin - startOfDay) / totalMinutes) * 100);
-                    const widthPct = Math.max(0.5, ((endMin - startMin) / totalMinutes) * 100);
-
-                    return (
-                      <Card
-                        key={lecture.id}
-                        className="absolute inset-y-1 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg overflow-hidden animate-slide-up border-2 border-white/20"
-                        style={{
-                          backgroundColor: lecture.color,
-                          left: `${leftPct}%`,
-                          width: `calc(${widthPct}% - 2px)`,
-                          ...(language === 'ar' ? { right: undefined } : {}),
-                          zIndex: 10 + lectureIndex,
-                        }}
-                        onClick={() => onLectureClick(lecture)}
-                      >
-                        <div className="p-2 h-full flex flex-col justify-center items-center text-white">
-                          <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
-                            {lecture.name}
-                          </p>
-                          <p className="text-[8px] opacity-90 mt-0.5">
-                            {lecture.startTime} - {lecture.endTime}
-                          </p>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
               </div>
             );
           })}
