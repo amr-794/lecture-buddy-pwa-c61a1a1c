@@ -1,9 +1,11 @@
 export type LectureType = 'lecture' | 'section';
 
 export interface Attachment {
+  id?: string; // IDB key for stored blob
   name: string;
-  data: string; // base64 or URL
   type: string; // MIME type
+  size?: number;
+  data?: string; // optional base64 for export/import
 }
 
 export interface Lecture {

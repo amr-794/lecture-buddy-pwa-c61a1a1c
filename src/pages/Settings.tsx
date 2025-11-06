@@ -65,31 +65,13 @@ const Settings: React.FC = () => {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
 
-    const savedBackups = loadBackups();
-    setBackups(savedBackups);
-
-    // Listen for profile image updates
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'profileImage') {
-        setProfileImage(e.newValue);
-      }
-    };
-
-    const handleCustomEvent = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail?.type === 'profileImageUpdated') {
-        const updatedImage = loadProfileImage();
-        setProfileImage(updatedImage);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('profileImageUpdate', handleCustomEvent);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('profileImageUpdate', handleCustomEvent);
-    };
+    // Load profile image from IDB (with legacy migration)
+    (async () => {
+      const { migrateLegacyProfileBase64IfAny, getProfileImageURL } = await import('@/utils/idb');
+      await migrateLegacyProfileBase64IfAny();
+      const url = await getProfileImageURL();
+      setProfileImage(url);
+    })();
   }, []);
 
   const toggleDarkMode = (checked: boolean) => {
@@ -102,12 +84,31 @@ const Settings: React.FC = () => {
     localStorage.setItem('theme', checked ? 'dark' : 'light');
   };
 
-  const handleExportWithChoice = (includeAttachments: boolean) => {
+  const handleExportWithChoice = async (includeAttachments: boolean) => {
     const lectures = loadLectures();
-    const dataToExport = includeAttachments 
-      ? lectures 
-      : lectures.map(l => ({ ...l, attachments: [] }));
-    
+    let dataToExport = lectures.map(l => ({ ...l }));
+
+    if (!includeAttachments) {
+      dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
+    } else {
+      // Fetch blobs from IDB and convert to base64 for export
+      const { getAttachmentAsDataURL } = await import('@/utils/idb');
+      for (const lec of dataToExport) {
+        if (lec.attachments && lec.attachments.length) {
+          const transformed = [] as any[];
+          for (const att of lec.attachments) {
+            if (att.id) {
+              const dataUrl = await getAttachmentAsDataURL(att.id);
+              if (dataUrl) transformed.push({ ...att, data: dataUrl });
+            } else if (att.data) {
+              transformed.push(att);
+            }
+          }
+          lec.attachments = transformed as any;
+        }
+      }
+    }
+
     const dataStr = JSON.stringify(dataToExport, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -152,7 +153,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleProfileImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const MAX_IMAGE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -166,26 +167,30 @@ const Settings: React.FC = () => {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageData = reader.result as string;
-        setProfileImage(imageData);
-        saveProfileImage(imageData);
-        
+      try {
+        const { setProfileImageFile } = await import('@/utils/idb');
+        const url = await setProfileImageFile(file);
+        setProfileImage(url);
         // Dispatch custom event for PWA
         window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
-          detail: { type: 'profileImageUpdated', image: imageData } 
+          detail: { type: 'profileImageUpdated', image: url } 
         }));
-        
         toast.success(t('language') === 'ar' ? 'تم تحديث الصورة الشخصية' : 'Profile image updated');
-      };
-      reader.readAsDataURL(file);
+      } catch (e) {
+        toast.error(language === 'ar' ? 'فشل حفظ الصورة' : 'Failed to save image');
+      }
     }
   };
 
-  const handleDeleteProfileImage = () => {
+  const handleDeleteProfileImage = async () => {
     setProfileImage(null);
-    deleteProfileImage();
+    try {
+      const { deleteProfileImageIDB } = await import('@/utils/idb');
+      await deleteProfileImageIDB();
+    } catch {
+      // fallback: remove legacy
+      deleteProfileImage();
+    }
     
     // Dispatch custom event for PWA
     window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
@@ -262,21 +267,23 @@ const Settings: React.FC = () => {
     toast.success(t('language') === 'ar' ? 'تم تصدير النسخة' : 'Backup exported');
   };
 
+  const [deleteStep, setDeleteStep] = React.useState<0 | 1 | 2>(0);
+  const [backupToDelete, setBackupToDelete] = React.useState<Backup | null>(null);
+
   const deleteBackup = (backupId: string) => {
     const backup = backups.find(b => b.id === backupId);
     if (!backup) return;
-    
-    if (!confirm(t('confirmDeleteBackupFirst').replace('{name}', backup.name))) {
-      return;
-    }
-    
-    if (!confirm(t('confirmDeleteBackupSecond'))) {
-      return;
-    }
-    
-    const updatedBackups = backups.filter(b => b.id !== backupId);
+    setBackupToDelete(backup);
+    setDeleteStep(1);
+  };
+
+  const completeDeleteBackup = () => {
+    if (!backupToDelete) return;
+    const updatedBackups = backups.filter(b => b.id !== backupToDelete.id);
     setBackups(updatedBackups);
     saveBackups(updatedBackups);
+    setDeleteStep(0);
+    setBackupToDelete(null);
     toast.success(t('language') === 'ar' ? 'تم حذف النسخة' : 'Backup deleted');
   };
 
@@ -634,6 +641,44 @@ const Settings: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Backup delete confirmations - step 1 */}
+      <AlertDialog open={deleteStep === 1} onOpenChange={(open) => setDeleteStep(open ? 1 : 0)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmDeleteBackupFirst').replace('{name}', backupToDelete?.name || '')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('language') === 'ar' ? 'ستنتقل للخطوة التالية للتأكيد النهائي' : 'You will proceed to the final confirmation step'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteStep(0)}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setDeleteStep(2)}>
+              {t('language') === 'ar' ? 'متابعة' : 'Continue'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Backup delete confirmations - step 2 (destructive) */}
+      <AlertDialog open={deleteStep === 2} onOpenChange={(open) => setDeleteStep(open ? 2 : 0)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              {t('confirmDeleteBackupSecond')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('language') === 'ar' ? 'لا يمكن التراجع عن هذا الإجراء' : 'This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteStep(0)}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={completeDeleteBackup}>
+              {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

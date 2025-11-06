@@ -72,72 +72,74 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
 
         {/* Days and lectures */}
         <div className="space-y-1">
-          {days.map((day, dayIndex) => (
-            <div key={day.key} className={`grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'}`}>
-              <div 
-                className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-50 ${
-                  language === 'ar' ? 'sticky right-0' : 'sticky left-0'
-                }`}
-              >
-                {t(day.key)}
+          {days.map((day, dayIndex) => {
+            const dayLectures = lectures.filter((l) => l.day === dayIndex);
+            const startOfDay = 7 * 60; // 7:00
+            const totalMinutes = timeSlots.length * 60; // 14 hours
+
+            return (
+              <div key={day.key} className={`relative grid gap-1 ${language === 'ar' ? 'grid-cols-[80px_repeat(14,1fr)]' : 'grid-cols-[80px_repeat(14,1fr)]'} items-stretch`}>
+                {/* Day label */}
+                <div 
+                  className={`h-16 flex items-center justify-center text-xs text-muted-foreground font-semibold bg-muted/50 rounded-lg z-50 ${
+                    language === 'ar' ? 'sticky right-0' : 'sticky left-0'
+                  }`}
+                >
+                  {t(day.key)}
+                </div>
+
+                {/* Timeline background cells */}
+                {timeSlots.map((hour, idx) => {
+                  const isEvenRow = dayIndex % 2 === 0;
+                  return (
+                    <div key={`${day.key}-${hour}`} className="relative h-16">
+                      <div className={`absolute inset-0 border border-border/50 rounded-lg ${
+                        isEvenRow 
+                          ? 'bg-card/30 dark:bg-primary/5' 
+                          : 'bg-card/50 dark:bg-secondary/5'
+                      }`} />
+                    </div>
+                  );
+                })}
+
+                {/* Overlay container spanning all time columns */}
+                <div className="relative h-16" style={{ gridColumn: '2 / -1' }}>
+                  {dayLectures.map((lecture, lectureIndex) => {
+                    const [sh, sm] = lecture.startTime.split(':').map(Number);
+                    const [eh, em] = lecture.endTime.split(':').map(Number);
+                    const startMin = sh * 60 + sm;
+                    const endMin = eh * 60 + em;
+                    const leftPct = Math.max(0, ((startMin - startOfDay) / totalMinutes) * 100);
+                    const widthPct = Math.max(0.5, ((endMin - startMin) / totalMinutes) * 100);
+
+                    return (
+                      <Card
+                        key={lecture.id}
+                        className="absolute inset-y-1 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg overflow-hidden animate-slide-up border-2 border-white/20"
+                        style={{
+                          backgroundColor: lecture.color,
+                          left: `${leftPct}%`,
+                          width: `calc(${widthPct}% - 2px)`,
+                          ...(language === 'ar' ? { right: undefined } : {}),
+                          zIndex: 10 + lectureIndex,
+                        }}
+                        onClick={() => onLectureClick(lecture)}
+                      >
+                        <div className="p-2 h-full flex flex-col justify-center items-center text-white">
+                          <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
+                            {lecture.name}
+                          </p>
+                          <p className="text-[8px] opacity-90 mt-0.5">
+                            {lecture.startTime} - {lecture.endTime}
+                          </p>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
-              {timeSlots.map((hour, hourIndex) => {
-                const dayLectures = getLecturesForDayAndHour(dayIndex, hour);
-                const isEvenRow = dayIndex % 2 === 0;
-                
-                // Check if this cell is already occupied by a lecture that started earlier
-                const isOccupied = lectures.some(lecture => {
-                  if (lecture.day !== dayIndex) return false;
-                  const [lectureStartHour] = lecture.startTime.split(':').map(Number);
-                  const [lectureEndHour] = lecture.endTime.split(':').map(Number);
-                  return lectureStartHour < hour && lectureEndHour > hour;
-                });
-                
-                return (
-                  <div key={`${day.key}-${hour}`} className="relative h-16">
-                    <div className={`absolute inset-0 border border-border/50 rounded-lg ${
-                      isEvenRow 
-                        ? 'bg-card/30 dark:bg-primary/5' 
-                        : 'bg-card/50 dark:bg-secondary/5'
-                    }`} />
-                    {!isOccupied && dayLectures.map((lecture, lectureIndex) => {
-                      const [startHour, startMinute] = lecture.startTime.split(':').map(Number);
-                      const [endHour, endMinute] = lecture.endTime.split(':').map(Number);
-                      const durationInMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-                      const durationInHours = durationInMinutes / 60;
-                      const cellsToSpan = Math.ceil(durationInHours);
-                      
-                      return (
-                        <Card
-                          key={lecture.id}
-                          className="absolute inset-y-1 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg overflow-hidden animate-slide-up border-2 border-white/20"
-                          style={{
-                            backgroundColor: lecture.color,
-                            width: `calc(${cellsToSpan * 100}% + ${(cellsToSpan - 1) * 4}px)`,
-                            ...(language === 'ar' 
-                              ? { right: 0 }
-                              : { left: 0 }
-                            ),
-                            zIndex: 10 + lectureIndex,
-                          }}
-                          onClick={() => onLectureClick(lecture)}
-                        >
-                          <div className="p-2 h-full flex flex-col justify-center items-center text-white">
-                            <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
-                              {lecture.name}
-                            </p>
-                            <p className="text-[8px] opacity-90 mt-0.5">
-                              {lecture.startTime} - {lecture.endTime}
-                            </p>
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

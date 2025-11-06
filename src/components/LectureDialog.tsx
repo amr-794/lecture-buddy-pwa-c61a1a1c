@@ -67,39 +67,49 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     }
   }, [lecture, open]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
     const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
-    Array.from(files).forEach(file => {
+    const arr = Array.from(files);
+    for (const file of arr) {
       if (file.size > MAX_FILE_SIZE) {
         toast.error(
           language === 'ar'
             ? `الملف ${file.name} كبير جداً. الحد الأقصى 100 ميجا`
             : `File ${file.name} is too large. Maximum 100MB`
         );
-        return;
+        continue;
       }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      try {
+        const { addAttachment } = await import('@/utils/idb');
+        const meta = await addAttachment(file);
         const newAttachment: Attachment = {
-          name: file.name,
-          data: event.target?.result as string,
-          type: file.type,
+          id: meta.id,
+          name: meta.name,
+          type: meta.type,
+          size: meta.size,
         };
         setFormData(prev => ({
           ...prev,
           attachments: [...(prev.attachments || []), newAttachment],
         }));
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        toast.error(language === 'ar' ? 'فشل رفع الملف' : 'Failed to upload file');
+      }
+    }
   };
 
-  const removeAttachment = (index: number) => {
+  const removeAttachment = async (index: number) => {
+    const target = formData.attachments?.[index];
+    if (target?.id) {
+      try {
+        const { deleteAttachment } = await import('@/utils/idb');
+        await deleteAttachment(target.id);
+      } catch {}
+    }
     setFormData(prev => ({
       ...prev,
       attachments: prev.attachments?.filter((_, i) => i !== index) || [],

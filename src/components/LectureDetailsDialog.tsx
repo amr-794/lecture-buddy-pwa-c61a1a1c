@@ -32,31 +32,43 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-  const downloadAttachment = (attachment: Attachment) => {
-    const link = document.createElement('a');
-    link.href = attachment.data;
-    link.download = attachment.name;
-    link.click();
+  const downloadAttachment = async (attachment: Attachment) => {
+    try {
+      let url: string | null = null;
+      if (attachment.id) {
+        const { getAttachmentBlob } = await import('@/utils/idb');
+        const blob = await getAttachmentBlob(attachment.id);
+        if (blob) url = URL.createObjectURL(blob);
+      } else if (attachment.data) {
+        url = attachment.data;
+      }
+      if (!url) return;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.name;
+      link.click();
+      // Revoke if object URL
+      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
+    } catch {}
   };
-
-  const openAttachment = (attachment: Attachment) => {
-    // Create a temporary link to open the file in the appropriate app
-    const link = document.createElement('a');
-    link.href = attachment.data;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    
-    // Set the correct MIME type if available
-    if (attachment.type) {
-      const blob = dataURLtoBlob(attachment.data);
-      const blobUrl = URL.createObjectURL(blob);
-      link.href = blobUrl;
-      
-      // Clean up the blob URL after opening
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-    }
-    
-    link.click();
+  const openAttachment = async (attachment: Attachment) => {
+    try {
+      let url: string | null = null;
+      if (attachment.id) {
+        const { getAttachmentBlob } = await import('@/utils/idb');
+        const blob = await getAttachmentBlob(attachment.id);
+        if (blob) url = URL.createObjectURL(blob);
+      } else if (attachment.data) {
+        url = attachment.data;
+      }
+      if (!url) return;
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
+    } catch {}
   };
 
   // Helper function to convert data URL to Blob

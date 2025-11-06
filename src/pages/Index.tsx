@@ -49,23 +49,30 @@ const Index = () => {
       document.documentElement.setAttribute('data-theme', appTheme);
     }
 
-    // Load profile image
-    const savedProfileImage = loadProfileImage();
-    setProfileImage(savedProfileImage);
-
-    // Update profile image when window gains focus (when returning from settings)
-    const handleFocus = () => {
-      const updatedProfileImage = loadProfileImage();
-      setProfileImage(updatedProfileImage);
-    };
+    // Load profile image from IDB (with legacy migration fallback)
+    (async () => {
+      const { migrateLegacyProfileBase64IfAny, getProfileImageURL } = await import('@/utils/idb');
+      await migrateLegacyProfileBase64IfAny();
+      const url = await getProfileImageURL();
+      setProfileImage(url);
+    })();
 
     // Listen for profile image updates (for PWA)
-    const handleProfileImageUpdate = (e: Event) => {
+    const refreshProfileImage = async () => {
+      const { getProfileImageURL } = await import('@/utils/idb');
+      const url = await getProfileImageURL();
+      setProfileImage(url);
+    };
+
+    const handleProfileImageUpdate = async (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.type === 'profileImageUpdated') {
-        const updatedImage = loadProfileImage();
-        setProfileImage(updatedImage);
+        await refreshProfileImage();
       }
+    };
+
+    const handleFocus = async () => {
+      await refreshProfileImage();
     };
 
     window.addEventListener('focus', handleFocus);
