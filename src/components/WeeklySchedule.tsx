@@ -141,21 +141,19 @@ const WeeklySchedule: React.FC<WeeklyScheduleProps> = ({ lectures, onLectureClic
                               style={{
                                 backgroundColor: lecture.color,
                                 width: totalWidth,
-                                ...(language === 'ar' 
-                                  ? { right: `${100 - leftPctInCell}%` }
-                                  : { left: `${leftPctInCell}%` }
-                                ),
+                                  ...(language === 'ar' 
+                                    ? { right: `${leftPctInCell}%` }
+                                    : { left: `${leftPctInCell}%` }
+                                  ),
                                 zIndex: 10 + lectureIndex,
                               }}
                               onClick={() => onLectureClick(lecture)}
                             >
                               <div className="p-2 h-full flex flex-col justify-center items-center text-white">
-                                <p className="text-[10px] font-semibold text-center line-clamp-2 drop-shadow-lg">
+                                <p className="text-[10px] font-semibold text-center whitespace-nowrap truncate drop-shadow-lg">
                                   {lecture.name}
                                 </p>
-                                <p className="text-[8px] opacity-90 mt-0.5">
-                                  {lecture.startTime} - {lecture.endTime}
-                                </p>
+                                <p className="text-[8px] opacity-90 mt-0.5">{lecture.startTime}</p>
                               </div>
                             </Card>
                           );
