@@ -23,6 +23,10 @@ export const loadSettings = (): Settings => {
     language: 'ar',
     theme: 'light',
     notificationSound: 'default',
+    alarmSound: 'default',
+    vibrationEnabled: true,
+    vibrationPattern: 'medium',
+    defaultAlarmMinutes: 7,
   };
 };
 

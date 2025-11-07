@@ -12,11 +12,13 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X } from 'lucide-react';
+import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X, Bell, Vibrate, Volume2, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage, loadBackups, saveBackups } from '@/utils/storage';
-import { Backup } from '@/types';
+import { loadLectures, saveLectures, loadSettings, saveSettings, loadBackups, saveBackups } from '@/utils/storage';
+import { Backup, Settings as SettingsType } from '@/types';
 import { toast } from 'sonner';
+import { NotificationService } from '@/services/notificationService';
+import AlarmSettingsCard from '@/components/AlarmSettingsCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,13 +53,12 @@ const Settings: React.FC = () => {
   const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
   const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
   const [editingBackupName, setEditingBackupName] = React.useState('');
+  const [settings, setSettings] = React.useState<SettingsType>(loadSettings());
+  const [hasNotificationPermission, setHasNotificationPermission] = React.useState(false);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
     setDarkMode(isDark);
-    
-    const savedProfileImage = loadProfileImage();
-    setProfileImage(savedProfileImage);
 
     const savedTheme = localStorage.getItem('appTheme') || 'default';
     setCurrentTheme(savedTheme);
@@ -71,7 +72,15 @@ const Settings: React.FC = () => {
       await migrateLegacyProfileBase64IfAny();
       const url = await getProfileImageURL();
       setProfileImage(url);
+      
+      // Check notification permissions
+      const hasPermission = await NotificationService.checkPermissions();
+      setHasNotificationPermission(hasPermission);
     })();
+    
+    // Load backups
+    const loadedBackups = loadBackups();
+    setBackups(loadedBackups);
   }, []);
 
   const toggleDarkMode = (checked: boolean) => {
@@ -414,6 +423,17 @@ const Settings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          <AlarmSettingsCard
+            settings={settings}
+            onSettingsChange={(newSettings) => {
+              setSettings(newSettings);
+              saveSettings(newSettings);
+            }}
+            language={language}
+            hasNotificationPermission={hasNotificationPermission}
+            onPermissionChange={setHasNotificationPermission}
+          />
 
           <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.3s' }}>
             <CardHeader>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lecture, LectureType, Attachment } from '@/types';
+import { Lecture, LectureType, Attachment, Settings } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Dialog,
@@ -18,9 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { HexColorPicker } from 'react-colorful';
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip, X, Bell } from 'lucide-react';
 import { toast } from 'sonner';
+import { loadSettings } from '@/utils/storage';
 
 interface LectureDialogProps {
   open: boolean;
@@ -47,14 +49,23 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     endTime: '10:00',
     color: '#3b82f6',
     attachments: [],
+    alarmEnabled: false,
+    alarmMinutesBefore: 7,
   });
 
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
+
+  useEffect(() => {
+    const loadedSettings = loadSettings();
+    setSettings(loadedSettings);
+  }, []);
 
   useEffect(() => {
     if (lecture) {
       setFormData(lecture);
     } else {
+      const defaultMinutes = settings?.defaultAlarmMinutes ?? 7;
       setFormData({
         name: '',
         type: 'lecture',
@@ -63,9 +74,11 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
         endTime: '10:00',
         color: '#3b82f6',
         attachments: [],
+        alarmEnabled: false,
+        alarmMinutesBefore: defaultMinutes,
       });
     }
-  }, [lecture, open]);
+  }, [lecture, open, settings]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -174,6 +187,9 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       endTime: formData.endTime || '10:00',
       color: formData.color || (formData.type === 'section' ? '#22c55e' : '#3b82f6'),
       attachments: formData.attachments || [],
+      alarmEnabled: formData.alarmEnabled || false,
+      alarmMinutesBefore: formData.alarmMinutesBefore || 7,
+      notificationId: lecture?.notificationId,
     };
     onSave(lectureData);
   };
@@ -285,6 +301,47 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
                   color={formData.color}
                   onChange={color => setFormData({ ...formData, color })}
                 />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary" />
+                <Label htmlFor="alarm-enabled" className="text-base font-semibold">
+                  {language === 'ar' ? 'تفعيل المنبه' : 'Enable Alarm'}
+                </Label>
+              </div>
+              <Switch
+                id="alarm-enabled"
+                checked={formData.alarmEnabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, alarmEnabled: checked })}
+              />
+            </div>
+            
+            {formData.alarmEnabled && (
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="alarm-minutes">
+                  {language === 'ar' ? 'التنبيه قبل المحاضرة بـ' : 'Alert before lecture by'}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="alarm-minutes"
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={formData.alarmMinutesBefore}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      alarmMinutesBefore: parseInt(e.target.value) || 7 
+                    })}
+                    className="w-20"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'دقيقة' : 'minutes'}
+                  </span>
+                </div>
               </div>
             )}
           </div>
