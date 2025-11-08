@@ -198,7 +198,7 @@ const Settings: React.FC = () => {
       await deleteProfileImageIDB();
     } catch {
       // fallback: remove legacy
-      deleteProfileImage();
+      localStorage.removeItem('profileImage');
     }
     
     // Dispatch custom event for PWA
