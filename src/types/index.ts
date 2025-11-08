@@ -19,7 +19,8 @@ export interface Lecture {
   attachments?: Attachment[];
   alarmEnabled?: boolean;
   alarmMinutesBefore?: number; // Minutes before lecture to trigger alarm
-  notificationId?: number; // For tracking scheduled notifications
+  alarmAtLectureTime?: boolean; // Whether to also alarm at lecture time
+  notificationIds?: number[]; // For tracking scheduled notifications
 }
 
 export interface Settings {
@@ -29,7 +30,6 @@ export interface Settings {
   alarmSound?: string; // Custom alarm sound path or 'default'
   vibrationEnabled?: boolean;
   vibrationPattern?: 'short' | 'medium' | 'long' | 'custom';
-  defaultAlarmMinutes?: number; // Default minutes before lecture
 }
 
 export interface Backup {

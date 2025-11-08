@@ -1,5 +1,6 @@
 import { LocalNotifications, ScheduleOptions } from '@capacitor/local-notifications';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Lecture, Settings } from '@/types';
 
 export class NotificationService {
@@ -23,61 +24,101 @@ export class NotificationService {
     }
   }
 
-  static async scheduleAlarm(lecture: Lecture, settings: Settings): Promise<number | null> {
+  static async scheduleAlarm(lecture: Lecture, settings: Settings): Promise<number[]> {
     try {
       const hasPermission = await this.checkPermissions();
       if (!hasPermission) {
         const granted = await this.requestPermissions();
         if (!granted) {
           console.error('Notification permissions not granted');
-          return null;
+          return [];
         }
       }
 
-      // Calculate the alarm time
-      const alarmMinutes = lecture.alarmMinutesBefore ?? settings.defaultAlarmMinutes ?? 7;
+      const notificationIds: number[] = [];
+      const alarmMinutes = lecture.alarmMinutesBefore ?? 7;
+      
+      // Schedule alarm before lecture time
       const alarmTime = this.calculateAlarmTime(lecture, alarmMinutes);
-
-      if (!alarmTime || alarmTime <= new Date()) {
-        console.log('Alarm time is in the past, skipping');
-        return null;
+      if (alarmTime && alarmTime > new Date()) {
+        const notificationId = Math.floor(Math.random() * 100000000);
+        
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: notificationId,
+              title: lecture.type === 'lecture' ? '🔔 محاضرة قريبة' : '📚 سيكشن قريب',
+              body: `${lecture.name} - سيبدأ في ${alarmMinutes} دقيقة`,
+              schedule: { at: alarmTime },
+              sound: settings.alarmSound || undefined,
+              actionTypeId: 'LECTURE_ALARM',
+              extra: {
+                lectureId: lecture.id,
+                lectureName: lecture.name,
+                startTime: lecture.startTime,
+              },
+            },
+          ],
+        });
+        
+        notificationIds.push(notificationId);
+        console.log(`Alarm scheduled for ${lecture.name} at ${alarmTime.toISOString()}`);
       }
 
-      const notificationId = Math.floor(Math.random() * 100000000);
-
-      const scheduleOptions: ScheduleOptions = {
-        notifications: [
-          {
-            id: notificationId,
-            title: lecture.type === 'lecture' ? '🔔 محاضرة قريبة' : '📚 سيكشن قريب',
-            body: `${lecture.name} - سيبدأ في ${alarmMinutes} دقيقة (${lecture.startTime})`,
-            schedule: { at: alarmTime },
-            sound: settings.alarmSound === 'default' ? 'beep.wav' : undefined,
-            actionTypeId: 'LECTURE_ALARM',
-            extra: {
-              lectureId: lecture.id,
-              lectureName: lecture.name,
-              startTime: lecture.startTime,
-            },
-          },
-        ],
-      };
-
-      await LocalNotifications.schedule(scheduleOptions);
+      // Schedule alarm at lecture time if enabled
+      if (lecture.alarmAtLectureTime) {
+        const lectureTime = this.calculateAlarmTime(lecture, 0);
+        if (lectureTime && lectureTime > new Date()) {
+          const notificationId = Math.floor(Math.random() * 100000000);
+          
+          await LocalNotifications.schedule({
+            notifications: [
+              {
+                id: notificationId,
+                title: lecture.type === 'lecture' ? '📚 بدأت المحاضرة الآن!' : '✍️ بدأ السيكشن الآن!',
+                body: `${lecture.name} - الوقت: ${lecture.startTime}`,
+                schedule: { at: lectureTime },
+                sound: settings.alarmSound || undefined,
+                actionTypeId: 'LECTURE_START',
+                extra: {
+                  lectureId: lecture.id,
+                  lectureName: lecture.name,
+                  startTime: lecture.startTime,
+                },
+              },
+            ],
+          });
+          
+          notificationIds.push(notificationId);
+          console.log(`Start alarm scheduled for ${lecture.name} at ${lectureTime.toISOString()}`);
+        }
+      }
       
-      console.log(`Alarm scheduled for ${lecture.name} at ${alarmTime.toISOString()}`);
-      
-      return notificationId;
+      return notificationIds;
     } catch (error) {
       console.error('Error scheduling alarm:', error);
+      return [];
+    }
+  }
+
+  static async pickCustomRingtone(): Promise<string | null> {
+    try {
+      // On Android, use file picker to select ringtone
+      // This is a placeholder - actual implementation would require native plugin
+      return 'custom_ringtone.mp3';
+    } catch (error) {
+      console.error('Error picking ringtone:', error);
       return null;
     }
   }
 
-  static async cancelAlarm(notificationId: number): Promise<void> {
+  static async cancelAlarm(notificationIds: number | number[]): Promise<void> {
     try {
-      await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
-      console.log(`Alarm ${notificationId} cancelled`);
+      const ids = Array.isArray(notificationIds) ? notificationIds : [notificationIds];
+      await LocalNotifications.cancel({ 
+        notifications: ids.map(id => ({ id }))
+      });
+      console.log(`Alarms cancelled: ${ids.join(', ')}`);
     } catch (error) {
       console.error('Error cancelling alarm:', error);
     }

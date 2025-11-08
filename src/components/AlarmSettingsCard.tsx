@@ -86,28 +86,6 @@ const AlarmSettingsCard: React.FC<AlarmSettingsCardProps> = ({
           </p>
         </div>
 
-        {/* Default Alarm Time */}
-        <div className="space-y-2">
-          <Label className="text-sm">
-            {language === 'ar' ? 'التنبيه الافتراضي قبل المحاضرة' : 'Default Alert Before Lecture'}
-          </Label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              min="1"
-              max="60"
-              value={settings.defaultAlarmMinutes || 7}
-              onChange={(e) => onSettingsChange({
-                ...settings,
-                defaultAlarmMinutes: parseInt(e.target.value) || 7,
-              })}
-              className="w-20"
-            />
-            <span className="text-sm text-muted-foreground">
-              {language === 'ar' ? 'دقيقة' : 'minutes'}
-            </span>
-          </div>
-        </div>
 
         {/* Alarm Sound */}
         <div className="space-y-2">

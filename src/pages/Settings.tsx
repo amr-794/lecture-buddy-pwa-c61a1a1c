@@ -13,6 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X, Bell, Vibrate, Volume2, CheckCircle2 } from 'lucide-react';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { useNavigate } from 'react-router-dom';
 import { loadLectures, saveLectures, loadSettings, saveSettings, loadBackups, saveBackups } from '@/utils/storage';
 import { Backup, Settings as SettingsType } from '@/types';
@@ -94,40 +96,48 @@ const Settings: React.FC = () => {
   };
 
   const handleExportWithChoice = async (includeAttachments: boolean) => {
-    const lectures = loadLectures();
-    let dataToExport = lectures.map(l => ({ ...l }));
+    try {
+      const lectures = loadLectures();
+      let dataToExport = lectures.map(l => ({ ...l }));
 
-    if (!includeAttachments) {
-      dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
-    } else {
-      // Fetch blobs from IDB and convert to base64 for export
-      const { getAttachmentAsDataURL } = await import('@/utils/idb');
-      for (const lec of dataToExport) {
-        if (lec.attachments && lec.attachments.length) {
-          const transformed = [] as any[];
-          for (const att of lec.attachments) {
-            if (att.id) {
-              const dataUrl = await getAttachmentAsDataURL(att.id);
-              if (dataUrl) transformed.push({ ...att, data: dataUrl });
-            } else if (att.data) {
-              transformed.push(att);
+      if (!includeAttachments) {
+        dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
+      } else {
+        // Fetch blobs from IDB and convert to base64 for export
+        const { getAttachmentAsDataURL } = await import('@/utils/idb');
+        for (const lec of dataToExport) {
+          if (lec.attachments && lec.attachments.length) {
+            const transformed = [] as any[];
+            for (const att of lec.attachments) {
+              if (att.id) {
+                const dataUrl = await getAttachmentAsDataURL(att.id);
+                if (dataUrl) transformed.push({ ...att, data: dataUrl });
+              } else if (att.data) {
+                transformed.push(att);
+              }
             }
+            lec.attachments = transformed as any;
           }
-          lec.attachments = transformed as any;
         }
       }
-    }
 
-    const dataStr = JSON.stringify(dataToExport, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setShowExportDialog(false);
-    toast.success(t('language') === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
+      const dataStr = JSON.stringify(dataToExport, null, 2);
+      const fileName = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
+
+      // Use Capacitor Filesystem API to save file
+      await Filesystem.writeFile({
+        path: fileName,
+        data: dataStr,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      setShowExportDialog(false);
+      toast.success(t('language') === 'ar' ? 'تم تصدير البيانات إلى المستندات' : 'Data exported to Documents');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(t('language') === 'ar' ? 'فشل تصدير البيانات' : 'Failed to export data');
+    }
   };
 
   const handleImportClick = () => {
@@ -264,16 +274,24 @@ const Settings: React.FC = () => {
     }
   };
 
-  const shareBackup = (backup: Backup) => {
-    const dataStr = JSON.stringify(backup.lectures, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${backup.name}-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success(t('language') === 'ar' ? 'تم تصدير النسخة' : 'Backup exported');
+  const shareBackup = async (backup: Backup) => {
+    try {
+      const dataStr = JSON.stringify(backup.lectures, null, 2);
+      const fileName = `${backup.name}-${new Date().toISOString().split('T')[0]}.json`;
+
+      // Use Capacitor Share API
+      await Share.share({
+        title: backup.name,
+        text: language === 'ar' ? `نسخة احتياطية: ${backup.name}` : `Backup: ${backup.name}`,
+        url: `data:application/json;base64,${btoa(dataStr)}`,
+        dialogTitle: language === 'ar' ? 'مشاركة النسخة الاحتياطية' : 'Share Backup',
+      });
+
+      toast.success(t('language') === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
+    } catch (error) {
+      console.error('Share error:', error);
+      toast.error(t('language') === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
+    }
   };
 
   const [deleteStep, setDeleteStep] = React.useState<0 | 1 | 2>(0);
@@ -397,11 +415,13 @@ const Settings: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="dark-mode" className="text-sm sm:text-base">{t('darkMode')}</Label>
-                <Switch
-                  id="dark-mode"
-                  checked={darkMode}
-                  onCheckedChange={toggleDarkMode}
-                />
+                <div className={language === 'ar' ? 'mr-auto' : 'ml-auto'}>
+                  <Switch
+                    id="dark-mode"
+                    checked={darkMode}
+                    onCheckedChange={toggleDarkMode}
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">

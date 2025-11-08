@@ -26,7 +26,6 @@ export const loadSettings = (): Settings => {
     alarmSound: 'default',
     vibrationEnabled: true,
     vibrationPattern: 'medium',
-    defaultAlarmMinutes: 7,
   };
 };
 

@@ -9,7 +9,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink } from 'lucide-react';
+import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Share2, ExternalLink } from 'lucide-react';
+import { Share } from '@capacitor/share';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -32,43 +33,66 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-  const downloadAttachment = async (attachment: Attachment) => {
+  const shareAttachment = async (attachment: Attachment) => {
     try {
-      let url: string | null = null;
+      let blob: Blob | null = null;
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
-        const blob = await getAttachmentBlob(attachment.id);
-        if (blob) url = URL.createObjectURL(blob);
+        blob = await getAttachmentBlob(attachment.id);
       } else if (attachment.data) {
-        url = attachment.data;
+        const response = await fetch(attachment.data);
+        blob = await response.blob();
       }
-      if (!url) return;
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = attachment.name;
-      link.click();
-      // Revoke if object URL
-      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
-    } catch {}
+      
+      if (!blob) return;
+
+      // Use Capacitor Share API
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        await Share.share({
+          title: attachment.name,
+          text: `مشاركة: ${attachment.name}`,
+          url: base64data,
+          dialogTitle: 'مشاركة المرفق',
+        });
+      };
+    } catch (error) {
+      console.error('Share error:', error);
+    }
   };
   const openAttachment = async (attachment: Attachment) => {
     try {
-      let url: string | null = null;
+      let blob: Blob | null = null;
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
-        const blob = await getAttachmentBlob(attachment.id);
-        if (blob) url = URL.createObjectURL(blob);
+        blob = await getAttachmentBlob(attachment.id);
       } else if (attachment.data) {
-        url = attachment.data;
+        const response = await fetch(attachment.data);
+        blob = await response.blob();
       }
-      if (!url) return;
+      
+      if (!blob) return;
+
+      // Create object URL and trigger native "Open with" dialog
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
+      link.download = attachment.name;
       link.target = '_blank';
-      link.rel = 'noopener noreferrer';
       link.click();
-      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
-    } catch {}
+      setTimeout(() => URL.revokeObjectURL(url), 200);
+    } catch (error) {
+      console.error('Open error:', error);
+    }
+  };
+
+  const formatTime12Hour = (time24: string): string => {
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
   // Helper function to convert data URL to Blob
@@ -122,7 +146,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('startTime')}</p>
-                <p className="font-semibold">{lecture.startTime}</p>
+                <p className="font-semibold">{formatTime12Hour(lecture.startTime)}</p>
               </div>
             </div>
 
@@ -132,7 +156,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('endTime')}</p>
-                <p className="font-semibold">{lecture.endTime}</p>
+                <p className="font-semibold">{formatTime12Hour(lecture.endTime)}</p>
               </div>
             </div>
 
@@ -180,9 +204,9 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => downloadAttachment(attachment)}
+                          onClick={() => shareAttachment(attachment)}
                         >
-                          <Download className="w-4 h-4" />
+                          <Share2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>

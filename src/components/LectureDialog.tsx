@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { HexColorPicker } from 'react-colorful';
-import { Paperclip, X, Bell } from 'lucide-react';
+import { Paperclip, X, Bell, Camera, Mic } from 'lucide-react';
+import { Camera as CapCamera, CameraResultType } from '@capacitor/camera';
 import { toast } from 'sonner';
 import { loadSettings } from '@/utils/storage';
 
@@ -51,6 +52,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     attachments: [],
     alarmEnabled: false,
     alarmMinutesBefore: 7,
+    alarmAtLectureTime: false,
   });
 
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -65,7 +67,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     if (lecture) {
       setFormData(lecture);
     } else {
-      const defaultMinutes = settings?.defaultAlarmMinutes ?? 7;
       setFormData({
         name: '',
         type: 'lecture',
@@ -75,10 +76,44 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
         color: '#3b82f6',
         attachments: [],
         alarmEnabled: false,
-        alarmMinutesBefore: defaultMinutes,
+        alarmMinutesBefore: 7,
+        alarmAtLectureTime: false,
       });
     }
   }, [lecture, open, settings]);
+
+  const handleCameraCapture = async () => {
+    try {
+      const image = await CapCamera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+      });
+
+      if (image.webPath) {
+        const response = await fetch(image.webPath);
+        const blob = await response.blob();
+        const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        const { addAttachment } = await import('@/utils/idb');
+        const meta = await addAttachment(file);
+        const newAttachment: Attachment = {
+          id: meta.id,
+          name: meta.name,
+          type: meta.type,
+          size: meta.size,
+        };
+        setFormData(prev => ({
+          ...prev,
+          attachments: [...(prev.attachments || []), newAttachment],
+        }));
+        toast.success(language === 'ar' ? 'تم إضافة الصورة' : 'Image added');
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      toast.error(language === 'ar' ? 'فشل التقاط الصورة' : 'Failed to capture image');
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -189,7 +224,8 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       attachments: formData.attachments || [],
       alarmEnabled: formData.alarmEnabled || false,
       alarmMinutesBefore: formData.alarmMinutesBefore || 7,
-      notificationId: lecture?.notificationId,
+      alarmAtLectureTime: formData.alarmAtLectureTime || false,
+      notificationIds: lecture?.notificationIds,
     };
     onSave(lectureData);
   };
@@ -321,26 +357,39 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
             </div>
             
             {formData.alarmEnabled && (
-              <div className="space-y-2 pt-2">
-                <Label htmlFor="alarm-minutes">
-                  {language === 'ar' ? 'التنبيه قبل المحاضرة بـ' : 'Alert before lecture by'}
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="alarm-minutes"
-                    type="number"
-                    min="1"
-                    max="60"
-                    value={formData.alarmMinutesBefore}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      alarmMinutesBefore: parseInt(e.target.value) || 7 
-                    })}
-                    className="w-20"
+              <div className="space-y-3 pt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="alarm-minutes">
+                    {language === 'ar' ? 'التنبيه قبل المحاضرة بـ' : 'Alert before lecture by'}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="alarm-minutes"
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={formData.alarmMinutesBefore}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        alarmMinutesBefore: parseInt(e.target.value) || 7 
+                      })}
+                      className="w-20"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {language === 'ar' ? 'دقيقة' : 'minutes'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <Label htmlFor="alarm-at-time" className="text-sm">
+                    {language === 'ar' ? 'تنبيه في موعد المحاضرة أيضاً' : 'Also alert at lecture time'}
+                  </Label>
+                  <Switch
+                    id="alarm-at-time"
+                    checked={formData.alarmAtLectureTime}
+                    onCheckedChange={(checked) => setFormData({ ...formData, alarmAtLectureTime: checked })}
                   />
-                  <span className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'دقيقة' : 'minutes'}
-                  </span>
                 </div>
               </div>
             )}
@@ -356,15 +405,24 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
                 className="hidden"
                 id="file-upload"
               />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => document.getElementById('file-upload')?.click()}
-              >
-                <Paperclip className="w-4 h-4 mr-2" />
-                {t('addAttachment')}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Paperclip className="w-4 h-4 mr-2" />
+                  {language === 'ar' ? 'إضافة ملف' : 'Add File'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCameraCapture}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  {language === 'ar' ? 'كاميرا' : 'Camera'}
+                </Button>
+              </div>
               
               {formData.attachments && formData.attachments.length > 0 && (
                 <div className="space-y-2 max-h-32 overflow-y-auto">

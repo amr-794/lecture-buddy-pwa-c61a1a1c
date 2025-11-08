@@ -89,9 +89,9 @@ const Index = () => {
     let updatedLectures: Lecture[];
     
     if (editingLecture) {
-      // Cancel old alarm if it existed
-      if (editingLecture.notificationId) {
-        await NotificationService.cancelAlarm(editingLecture.notificationId);
+      // Cancel old alarms if they existed
+      if (editingLecture.notificationIds && editingLecture.notificationIds.length > 0) {
+        await NotificationService.cancelAlarm(editingLecture.notificationIds);
       }
       updatedLectures = lectures.map(l => (l.id === lecture.id ? lecture : l));
       toast.success(t('language') === 'ar' ? 'تم تحديث المحاضرة' : 'Lecture updated');
@@ -103,10 +103,10 @@ const Index = () => {
     // Schedule alarm if enabled
     if (lecture.alarmEnabled) {
       const settings = loadSettings();
-      const notificationId = await NotificationService.scheduleAlarm(lecture, settings);
-      if (notificationId) {
-        lecture.notificationId = notificationId;
-        // Update with notification ID
+      const notificationIds = await NotificationService.scheduleAlarm(lecture, settings);
+      if (notificationIds.length > 0) {
+        lecture.notificationIds = notificationIds;
+        // Update with notification IDs
         updatedLectures = updatedLectures.map(l => l.id === lecture.id ? lecture : l);
       }
     }
@@ -138,9 +138,9 @@ const Index = () => {
 
   const confirmDelete = async () => {
     if (selectedLecture) {
-      // Cancel alarm if it exists
-      if (selectedLecture.notificationId) {
-        await NotificationService.cancelAlarm(selectedLecture.notificationId);
+      // Cancel alarms if they exist
+      if (selectedLecture.notificationIds && selectedLecture.notificationIds.length > 0) {
+        await NotificationService.cancelAlarm(selectedLecture.notificationIds);
       }
       
       const updatedLectures = lectures.filter(l => l.id !== selectedLecture.id);
