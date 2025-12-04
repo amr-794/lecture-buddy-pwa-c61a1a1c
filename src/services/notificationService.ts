@@ -1,6 +1,5 @@
-import { LocalNotifications, ScheduleOptions } from '@capacitor/local-notifications';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Haptics } from '@capacitor/haptics';
 import { Lecture, Settings } from '@/types';
 
 export class NotificationService {
@@ -36,7 +35,7 @@ export class NotificationService {
       }
 
       const notificationIds: number[] = [];
-      const alarmMinutes = lecture.alarmMinutesBefore ?? 7;
+      const alarmMinutes = lecture.alarmMinutesBefore ?? 10;
       
       // Schedule alarm before lecture time
       const alarmTime = this.calculateAlarmTime(lecture, alarmMinutes);
@@ -50,7 +49,8 @@ export class NotificationService {
               title: lecture.type === 'lecture' ? '🔔 محاضرة قريبة' : '📚 سيكشن قريب',
               body: `${lecture.name} - سيبدأ في ${alarmMinutes} دقيقة`,
               schedule: { at: alarmTime },
-              sound: settings.alarmSound || undefined,
+              sound: settings.alarmSound === 'default' ? 'beep.wav' : undefined,
+              channelId: 'lecture_alarms',
               actionTypeId: 'LECTURE_ALARM',
               extra: {
                 lectureId: lecture.id,
@@ -63,6 +63,11 @@ export class NotificationService {
         
         notificationIds.push(notificationId);
         console.log(`Alarm scheduled for ${lecture.name} at ${alarmTime.toISOString()}`);
+
+        // Trigger vibration if enabled
+        if (settings.vibrationEnabled) {
+          this.scheduleVibration(alarmTime, settings.vibrationPattern || 'medium');
+        }
       }
 
       // Schedule alarm at lecture time if enabled
@@ -78,7 +83,8 @@ export class NotificationService {
                 title: lecture.type === 'lecture' ? '📚 بدأت المحاضرة الآن!' : '✍️ بدأ السيكشن الآن!',
                 body: `${lecture.name} - الوقت: ${lecture.startTime}`,
                 schedule: { at: lectureTime },
-                sound: settings.alarmSound || undefined,
+                sound: settings.alarmSound === 'default' ? 'beep.wav' : undefined,
+                channelId: 'lecture_alarms',
                 actionTypeId: 'LECTURE_START',
                 extra: {
                   lectureId: lecture.id,
@@ -101,14 +107,12 @@ export class NotificationService {
     }
   }
 
-  static async pickCustomRingtone(): Promise<string | null> {
-    try {
-      // On Android, use file picker to select ringtone
-      // This is a placeholder - actual implementation would require native plugin
-      return 'custom_ringtone.mp3';
-    } catch (error) {
-      console.error('Error picking ringtone:', error);
-      return null;
+  private static async scheduleVibration(time: Date, pattern: string): Promise<void> {
+    const delay = time.getTime() - Date.now();
+    if (delay > 0) {
+      setTimeout(() => {
+        this.triggerVibration(pattern as any);
+      }, delay);
     }
   }
 
@@ -140,10 +144,8 @@ export class NotificationService {
 
   static async rescheduleAllAlarms(lectures: Lecture[], settings: Settings): Promise<void> {
     try {
-      // Cancel all existing alarms
       await this.cancelAllAlarms();
 
-      // Schedule new alarms for lectures that have alarm enabled
       for (const lecture of lectures) {
         if (lecture.alarmEnabled) {
           await this.scheduleAlarm(lecture, settings);
@@ -169,7 +171,6 @@ export class NotificationService {
           await Haptics.vibrate({ duration: 1000 });
           break;
         case 'custom':
-          // Custom vibration pattern: vibrate 3 times
           for (let i = 0; i < 3; i++) {
             await Haptics.vibrate({ duration: 300 });
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -194,10 +195,11 @@ export class NotificationService {
         notifications: [
           {
             id: testId,
-            title: 'اختبار المنبه',
+            title: '🔔 اختبار المنبه',
             body: 'هذا اختبار للتأكد من عمل المنبه بشكل صحيح',
-            schedule: { at: new Date(Date.now() + 2000) }, // 2 seconds from now
+            schedule: { at: new Date(Date.now() + 2000) },
             sound: settings.alarmSound === 'default' ? 'beep.wav' : undefined,
+            channelId: 'lecture_alarms',
           },
         ],
       });
@@ -212,25 +214,40 @@ export class NotificationService {
     }
   }
 
+  static async createNotificationChannel(): Promise<void> {
+    try {
+      await LocalNotifications.createChannel({
+        id: 'lecture_alarms',
+        name: 'Lecture Alarms',
+        description: 'Notifications for lecture reminders',
+        importance: 5, // Max importance for alarms
+        visibility: 1,
+        sound: 'beep.wav',
+        vibration: true,
+        lights: true,
+      });
+      console.log('Notification channel created');
+    } catch (error) {
+      console.error('Error creating notification channel:', error);
+    }
+  }
+
   private static calculateAlarmTime(lecture: Lecture, minutesBefore: number): Date | null {
     try {
       const now = new Date();
       const currentDay = now.getDay();
       
-      // Parse lecture time
       const [hours, minutes] = lecture.startTime.split(':').map(Number);
       
-      // Calculate days until the lecture
       let daysUntil = lecture.day - currentDay;
       if (daysUntil < 0) {
-        daysUntil += 7; // Next week
+        daysUntil += 7;
       } else if (daysUntil === 0) {
-        // Check if the time has passed today
         const lectureTimeToday = new Date(now);
         lectureTimeToday.setHours(hours, minutes, 0, 0);
         
         if (lectureTimeToday <= now) {
-          daysUntil = 7; // Schedule for next week
+          daysUntil = 7;
         }
       }
       

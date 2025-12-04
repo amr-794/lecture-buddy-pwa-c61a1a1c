@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { HexColorPicker } from 'react-colorful';
-import { Paperclip, X, Bell, Camera, Mic } from 'lucide-react';
+import { Paperclip, X, Bell, Camera } from 'lucide-react';
 import { Camera as CapCamera, CameraResultType } from '@capacitor/camera';
 import { toast } from 'sonner';
 import { loadSettings } from '@/utils/storage';
@@ -32,6 +32,8 @@ interface LectureDialogProps {
   onSave: (lecture: Lecture) => void;
   existingLectures: Lecture[];
 }
+
+const ALARM_MINUTES_OPTIONS = [5, 10, 15, 30, 60, 90, 120];
 
 const LectureDialog: React.FC<LectureDialogProps> = ({
   open,
@@ -51,7 +53,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     color: '#3b82f6',
     attachments: [],
     alarmEnabled: false,
-    alarmMinutesBefore: 7,
+    alarmMinutesBefore: 10,
     alarmAtLectureTime: false,
   });
 
@@ -76,7 +78,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
         color: '#3b82f6',
         attachments: [],
         alarmEnabled: false,
-        alarmMinutesBefore: 7,
+        alarmMinutesBefore: 10,
         alarmAtLectureTime: false,
       });
     }
@@ -171,10 +173,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     const newEnd = endHour * 60 + endMinute;
 
     return existingLectures.some(existingLecture => {
-      // Skip if it's the same lecture being edited
       if (lecture && existingLecture.id === lecture.id) return false;
-      
-      // Check if same day
       if (existingLecture.day !== day) return false;
 
       const [exStartHour, exStartMinute] = existingLecture.startTime.split(':').map(Number);
@@ -182,7 +181,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       const exStart = exStartHour * 60 + exStartMinute;
       const exEnd = exEndHour * 60 + exEndMinute;
 
-      // Check for overlap
       return (newStart < exEnd && newEnd > exStart);
     });
   };
@@ -190,15 +188,18 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate time range (7 AM to 8 PM)
-    const [startHour] = (formData.startTime || '09:00').split(':').map(Number);
-    const [endHour] = (formData.endTime || '10:00').split(':').map(Number);
+    const [startHour, startMinute] = (formData.startTime || '09:00').split(':').map(Number);
+    const [endHour, endMinute] = (formData.endTime || '10:00').split(':').map(Number);
     
-    if (startHour < 7 || endHour > 20 || startHour >= endHour) {
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    
+    // Check if start time is before end time
+    if (startTotalMinutes >= endTotalMinutes) {
       toast.error(
         language === 'ar'
-          ? 'الوقت يجب أن يكون بين 7 صباحاً و 8 مساءً'
-          : 'Time must be between 7 AM and 8 PM'
+          ? 'وقت البداية يجب أن يكون قبل وقت النهاية'
+          : 'Start time must be before end time'
       );
       return;
     }
@@ -223,7 +224,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       color: formData.color || (formData.type === 'section' ? '#22c55e' : '#3b82f6'),
       attachments: formData.attachments || [],
       alarmEnabled: formData.alarmEnabled || false,
-      alarmMinutesBefore: formData.alarmMinutesBefore || 7,
+      alarmMinutesBefore: formData.alarmMinutesBefore || 10,
       alarmAtLectureTime: formData.alarmAtLectureTime || false,
       notificationIds: lecture?.notificationIds,
     };
@@ -239,6 +240,18 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     'friday',
     'saturday',
   ];
+
+  const getMinutesLabel = (minutes: number): string => {
+    if (minutes < 60) {
+      return language === 'ar' ? `${minutes} د` : `${minutes}m`;
+    } else if (minutes === 60) {
+      return language === 'ar' ? '1 س' : '1h';
+    } else if (minutes === 90) {
+      return language === 'ar' ? '1.5 س' : '1.5h';
+    } else {
+      return language === 'ar' ? '2 س' : '2h';
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -359,25 +372,24 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
             {formData.alarmEnabled && (
               <div className="space-y-3 pt-2">
                 <div className="space-y-2">
-                  <Label htmlFor="alarm-minutes">
+                  <Label>
                     {language === 'ar' ? 'التنبيه قبل المحاضرة بـ' : 'Alert before lecture by'}
                   </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="alarm-minutes"
-                      type="number"
-                      min="1"
-                      max="60"
-                      value={formData.alarmMinutesBefore}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        alarmMinutesBefore: parseInt(e.target.value) || 7 
-                      })}
-                      className="w-20"
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'دقيقة' : 'minutes'}
-                    </span>
+                  <div className="flex flex-wrap gap-2">
+                    {ALARM_MINUTES_OPTIONS.map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, alarmMinutesBefore: minutes })}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          formData.alarmMinutesBefore === minutes
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                        }`}
+                      >
+                        {getMinutesLabel(minutes)}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
