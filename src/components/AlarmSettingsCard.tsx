@@ -3,9 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bell, Vibrate, Volume2, CheckCircle2 } from 'lucide-react';
+import { Bell, Vibrate, Volume2, CheckCircle2, Shield, Music } from 'lucide-react';
 import { Settings as SettingsType } from '@/types';
 import { NotificationService } from '@/services/notificationService';
 import { toast } from 'sonner';
@@ -45,6 +44,21 @@ const AlarmSettingsCard: React.FC<AlarmSettingsCardProps> = ({
     toast.success(language === 'ar' ? 'اختبار الاهتزاز' : 'Vibration test');
   };
 
+  const handleSelectRingtone = async () => {
+    // Create file input for audio files
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        onSettingsChange({ ...settings, alarmSound: file.name });
+        toast.success(language === 'ar' ? `تم اختيار: ${file.name}` : `Selected: ${file.name}`);
+      }
+    };
+    input.click();
+  };
+
   return (
     <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.25s' }}>
       <CardHeader>
@@ -56,36 +70,51 @@ const AlarmSettingsCard: React.FC<AlarmSettingsCardProps> = ({
       <CardContent className="space-y-4">
         {/* Permissions Section */}
         <div className="p-4 bg-muted/30 rounded-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bell className="w-5 h-5 text-primary" />
-              <Label className="text-sm font-semibold">
-                {language === 'ar' ? 'أذونات الإشعارات' : 'Notification Permissions'}
-              </Label>
-            </div>
-            {hasNotificationPermission && (
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-            )}
+          <div className="flex items-center gap-2 mb-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <Label className="text-sm font-semibold">
+              {language === 'ar' ? 'الأذونات المطلوبة' : 'Required Permissions'}
+            </Label>
           </div>
           
-          {!hasNotificationPermission && (
-            <Button
-              onClick={handleRequestPermissions}
-              variant="outline"
-              className="w-full"
-              size="sm"
-            >
-              {language === 'ar' ? 'طلب الأذونات' : 'Request Permissions'}
-            </Button>
-          )}
+          <div className="space-y-2">
+            {/* Notification Permission */}
+            <div className="flex items-center justify-between p-2 bg-background rounded-lg">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {language === 'ar' ? 'الإشعارات' : 'Notifications'}
+                </span>
+              </div>
+              {hasNotificationPermission ? (
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              ) : (
+                <Button size="sm" variant="outline" onClick={handleRequestPermissions}>
+                  {language === 'ar' ? 'السماح' : 'Allow'}
+                </Button>
+              )}
+            </div>
+
+            {/* Background Running Info */}
+            <div className="flex items-center justify-between p-2 bg-background rounded-lg">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {language === 'ar' ? 'العمل في الخلفية' : 'Background Running'}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'تلقائي' : 'Auto'}
+              </span>
+            </div>
+          </div>
           
           <p className="text-xs text-muted-foreground">
             {language === 'ar'
-              ? 'يحتاج التطبيق إلى أذونات لعرض الإشعارات والمنبهات'
-              : 'The app needs permissions to show notifications and alarms'}
+              ? 'يحتاج التطبيق إلى أذونات لعرض الإشعارات والمنبهات حتى عند إغلاق التطبيق'
+              : 'The app needs permissions to show notifications and alarms even when the app is closed'}
           </p>
         </div>
-
 
         {/* Alarm Sound */}
         <div className="space-y-2">
@@ -93,22 +122,34 @@ const AlarmSettingsCard: React.FC<AlarmSettingsCardProps> = ({
             <Volume2 className="w-4 h-4" />
             {language === 'ar' ? 'نغمة المنبه' : 'Alarm Sound'}
           </Label>
-          <Select
-            value={settings.alarmSound || 'default'}
-            onValueChange={(value) => onSettingsChange({ ...settings, alarmSound: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">
-                {language === 'ar' ? 'النغمة الافتراضية' : 'Default Sound'}
-              </SelectItem>
-              <SelectItem value="custom">
-                {language === 'ar' ? 'نغمة مخصصة' : 'Custom Sound'}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select
+              value={settings.alarmSound || 'default'}
+              onValueChange={(value) => onSettingsChange({ ...settings, alarmSound: value })}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={4} className="z-50">
+                <SelectItem value="default">
+                  {language === 'ar' ? 'النغمة الافتراضية' : 'Default Sound'}
+                </SelectItem>
+                {settings.alarmSound && settings.alarmSound !== 'default' && (
+                  <SelectItem value={settings.alarmSound}>
+                    {settings.alarmSound}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleSelectRingtone}
+              title={language === 'ar' ? 'اختيار نغمة' : 'Select Ringtone'}
+            >
+              <Music className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Vibration Settings */}
@@ -140,10 +181,10 @@ const AlarmSettingsCard: React.FC<AlarmSettingsCardProps> = ({
                     vibrationPattern: value,
                   })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={4} className="z-50">
                     <SelectItem value="short">
                       {language === 'ar' ? 'قصير' : 'Short'}
                     </SelectItem>

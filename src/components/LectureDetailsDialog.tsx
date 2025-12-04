@@ -11,6 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Share2, ExternalLink } from 'lucide-react';
 import { Share } from '@capacitor/share';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { toast } from 'sonner';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -27,15 +29,25 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   if (!lecture) return null;
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const shareAttachment = async (attachment: Attachment) => {
     try {
       let blob: Blob | null = null;
+      
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
         blob = await getAttachmentBlob(attachment.id);
@@ -44,27 +56,61 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
         blob = await response.blob();
       }
       
-      if (!blob) return;
+      if (!blob) {
+        toast.error(language === 'ar' ? 'فشل تحميل المرفق' : 'Failed to load attachment');
+        return;
+      }
 
-      // Use Capacitor Share API
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
+      // Convert blob to base64
+      const base64Data = await blobToBase64(blob);
+      
+      // Write file to cache directory first
+      const fileName = attachment.name || `file_${Date.now()}`;
+      
+      try {
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+
+        const fileUri = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache,
+        });
+
         await Share.share({
           title: attachment.name,
-          text: `مشاركة: ${attachment.name}`,
-          url: base64data,
-          dialogTitle: 'مشاركة المرفق',
+          text: language === 'ar' ? `مشاركة: ${attachment.name}` : `Share: ${attachment.name}`,
+          url: fileUri.uri,
+          dialogTitle: language === 'ar' ? 'مشاركة المرفق' : 'Share Attachment',
         });
-      };
+
+        toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
+      } catch (shareError) {
+        console.error('Share error:', shareError);
+        // Fallback: try web share API
+        if (navigator.share) {
+          const file = new File([blob], attachment.name, { type: blob.type });
+          await navigator.share({
+            files: [file],
+            title: attachment.name,
+          });
+          toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
+        } else {
+          toast.error(language === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
+        }
+      }
     } catch (error) {
       console.error('Share error:', error);
+      toast.error(language === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
     }
   };
+
   const openAttachment = async (attachment: Attachment) => {
     try {
       let blob: Blob | null = null;
+      
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
         blob = await getAttachmentBlob(attachment.id);
@@ -73,18 +119,42 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
         blob = await response.blob();
       }
       
-      if (!blob) return;
+      if (!blob) {
+        toast.error(language === 'ar' ? 'فشل تحميل المرفق' : 'Failed to load attachment');
+        return;
+      }
 
-      // Create object URL and trigger native "Open with" dialog
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = attachment.name;
-      link.target = '_blank';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 200);
+      const base64Data = await blobToBase64(blob);
+      const fileName = attachment.name || `file_${Date.now()}`;
+
+      try {
+        // Write to cache directory
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+
+        const fileUri = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache,
+        });
+
+        // Use Share API to open with external app (this triggers "Open with" dialog)
+        await Share.share({
+          url: fileUri.uri,
+          dialogTitle: language === 'ar' ? 'فتح بواسطة' : 'Open with',
+        });
+      } catch (fsError) {
+        console.error('Filesystem error:', fsError);
+        // Fallback: open in new tab (web)
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
     } catch (error) {
       console.error('Open error:', error);
+      toast.error(language === 'ar' ? 'فشل فتح المرفق' : 'Failed to open attachment');
     }
   };
 
@@ -93,20 +163,6 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
     const period = hours >= 12 ? 'PM' : 'AM';
     const hours12 = hours % 12 || 12;
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
-
-  // Helper function to convert data URL to Blob
-  const dataURLtoBlob = (dataUrl: string): Blob => {
-    const arr = dataUrl.split(',');
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
   };
 
   return (
@@ -196,6 +252,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => openAttachment(attachment)}
+                          title={language === 'ar' ? 'فتح' : 'Open'}
                         >
                           <ExternalLink className="w-4 h-4" />
                         </Button>
@@ -205,6 +262,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => shareAttachment(attachment)}
+                          title={language === 'ar' ? 'مشاركة' : 'Share'}
                         >
                           <Share2 className="w-4 h-4" />
                         </Button>
