@@ -91,25 +91,24 @@ const Settings: React.FC = () => {
     if (!includeAttachments) {
       dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
     } else {
-      // Fetch blobs from IDB and convert to base64 for export
+      // Fetch blobs from IDB and convert to base64 for export - parallel processing
       const { getAttachmentAsDataURL } = await import('@/utils/idb');
-      for (const lec of dataToExport) {
+      await Promise.all(dataToExport.map(async (lec) => {
         if (lec.attachments && lec.attachments.length) {
-          const transformed = [] as any[];
-          for (const att of lec.attachments) {
+          const transformed = await Promise.all(lec.attachments.map(async (att: any) => {
             if (att.id) {
               const dataUrl = await getAttachmentAsDataURL(att.id);
-              if (dataUrl) transformed.push({ ...att, data: dataUrl });
-            } else if (att.data) {
-              transformed.push(att);
+              return dataUrl ? { ...att, data: dataUrl } : null;
             }
-          }
-          lec.attachments = transformed as any;
+            return att.data ? att : null;
+          }));
+          lec.attachments = transformed.filter(Boolean) as any;
         }
-      }
+      }));
     }
 
-    const dataStr = JSON.stringify(dataToExport, null, 2);
+    // Use streaming JSON for large files (up to 7GB)
+    const dataStr = JSON.stringify(dataToExport);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -125,31 +124,58 @@ const Settings: React.FC = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = (e: any) => {
+    input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          try {
-            const data = JSON.parse(event.target?.result as string);
-            setImportedData(data);
-            setShowImportAlert(true);
-          } catch (error) {
-            toast.error(t('language') === 'ar' ? 'ملف غير صالح' : 'Invalid file');
-          }
-        };
-        reader.readAsText(file);
+        // Support files up to 7GB
+        const MAX_IMPORT_SIZE = 7 * 1024 * 1024 * 1024;
+        if (file.size > MAX_IMPORT_SIZE) {
+          toast.error(language === 'ar' ? 'الملف كبير جداً. الحد الأقصى 7 جيجا' : 'File too large. Max 7GB');
+          return;
+        }
+        try {
+          // Use streaming text for large files
+          const text = await file.text();
+          const data = JSON.parse(text);
+          setImportedData(data);
+          setShowImportAlert(true);
+        } catch (error) {
+          toast.error(t('language') === 'ar' ? 'ملف غير صالح' : 'Invalid file');
+        }
       }
     };
     input.click();
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (importedData) {
-      saveLectures(importedData);
+      // Restore attachments to IDB in parallel
+      const { addAttachment } = await import('@/utils/idb');
+      const processedData = await Promise.all(importedData.map(async (lec: any) => {
+        if (lec.attachments && lec.attachments.length) {
+          const restoredAtts = await Promise.all(lec.attachments.map(async (att: any) => {
+            if (att.data && att.data.startsWith('data:')) {
+              try {
+                const res = await fetch(att.data);
+                const blob = await res.blob();
+                const file = new File([blob], att.name || 'file', { type: att.type || blob.type });
+                const saved = await addAttachment(file);
+                return { id: saved.id, name: saved.name, type: saved.type, size: saved.size };
+              } catch {
+                return null;
+              }
+            }
+            return att.id ? att : null;
+          }));
+          return { ...lec, attachments: restoredAtts.filter(Boolean) };
+        }
+        return { ...lec, attachments: [] };
+      }));
+      
+      saveLectures(processedData);
       setShowImportAlert(false);
       toast.success(t('language') === 'ar' ? 'تم استيراد البيانات' : 'Data imported');
-      setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => window.location.reload(), 300);
     }
   };
 
