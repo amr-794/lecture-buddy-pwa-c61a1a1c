@@ -17,19 +17,12 @@ export interface Lecture {
   endTime: string; // HH:mm format
   color: string;
   attachments?: Attachment[];
-  alarmEnabled?: boolean;
-  alarmMinutesBefore?: number; // Minutes before lecture to trigger alarm
-  alarmAtLectureTime?: boolean; // Whether to also alarm at lecture time
-  notificationIds?: number[]; // For tracking scheduled notifications
 }
 
 export interface Settings {
   language: 'ar' | 'en';
   theme: 'light' | 'dark';
   notificationSound: string;
-  alarmSound?: string; // Custom alarm sound path or 'default'
-  vibrationEnabled?: boolean;
-  vibrationPattern?: 'short' | 'medium' | 'long' | 'custom';
 }
 
 export interface Backup {

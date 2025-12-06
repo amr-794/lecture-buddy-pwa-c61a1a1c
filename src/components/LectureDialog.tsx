@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lecture, LectureType, Attachment, Settings } from '@/types';
+import { Lecture, LectureType, Attachment } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Dialog,
@@ -18,12 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { HexColorPicker } from 'react-colorful';
-import { Paperclip, X, Bell, Camera } from 'lucide-react';
-import { Camera as CapCamera, CameraResultType } from '@capacitor/camera';
+import { Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { loadSettings } from '@/utils/storage';
 
 interface LectureDialogProps {
   open: boolean;
@@ -32,8 +29,6 @@ interface LectureDialogProps {
   onSave: (lecture: Lecture) => void;
   existingLectures: Lecture[];
 }
-
-const ALARM_MINUTES_OPTIONS = [5, 10, 15, 30, 60, 90, 120];
 
 const LectureDialog: React.FC<LectureDialogProps> = ({
   open,
@@ -52,18 +47,9 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     endTime: '10:00',
     color: '#3b82f6',
     attachments: [],
-    alarmEnabled: false,
-    alarmMinutesBefore: 10,
-    alarmAtLectureTime: false,
   });
 
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [settings, setSettings] = useState<Settings | null>(null);
-
-  useEffect(() => {
-    const loadedSettings = loadSettings();
-    setSettings(loadedSettings);
-  }, []);
 
   useEffect(() => {
     if (lecture) {
@@ -77,45 +63,9 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
         endTime: '10:00',
         color: '#3b82f6',
         attachments: [],
-        alarmEnabled: false,
-        alarmMinutesBefore: 10,
-        alarmAtLectureTime: false,
       });
     }
-  }, [lecture, open, settings]);
-
-  const handleCameraCapture = async () => {
-    try {
-      const image = await CapCamera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.Uri,
-      });
-
-      if (image.webPath) {
-        const response = await fetch(image.webPath);
-        const blob = await response.blob();
-        const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        
-        const { addAttachment } = await import('@/utils/idb');
-        const meta = await addAttachment(file);
-        const newAttachment: Attachment = {
-          id: meta.id,
-          name: meta.name,
-          type: meta.type,
-          size: meta.size,
-        };
-        setFormData(prev => ({
-          ...prev,
-          attachments: [...(prev.attachments || []), newAttachment],
-        }));
-        toast.success(language === 'ar' ? 'تم إضافة الصورة' : 'Image added');
-      }
-    } catch (error) {
-      console.error('Camera error:', error);
-      toast.error(language === 'ar' ? 'فشل التقاط الصورة' : 'Failed to capture image');
-    }
-  };
+  }, [lecture, open]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -173,7 +123,10 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     const newEnd = endHour * 60 + endMinute;
 
     return existingLectures.some(existingLecture => {
+      // Skip if it's the same lecture being edited
       if (lecture && existingLecture.id === lecture.id) return false;
+      
+      // Check if same day
       if (existingLecture.day !== day) return false;
 
       const [exStartHour, exStartMinute] = existingLecture.startTime.split(':').map(Number);
@@ -181,6 +134,7 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       const exStart = exStartHour * 60 + exStartMinute;
       const exEnd = exEndHour * 60 + exEndMinute;
 
+      // Check for overlap
       return (newStart < exEnd && newEnd > exStart);
     });
   };
@@ -188,18 +142,15 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const [startHour, startMinute] = (formData.startTime || '09:00').split(':').map(Number);
-    const [endHour, endMinute] = (formData.endTime || '10:00').split(':').map(Number);
+    // Validate time range (7 AM to 8 PM)
+    const [startHour] = (formData.startTime || '09:00').split(':').map(Number);
+    const [endHour] = (formData.endTime || '10:00').split(':').map(Number);
     
-    const startTotalMinutes = startHour * 60 + startMinute;
-    const endTotalMinutes = endHour * 60 + endMinute;
-    
-    // Check if start time is before end time
-    if (startTotalMinutes >= endTotalMinutes) {
+    if (startHour < 7 || endHour > 20 || startHour >= endHour) {
       toast.error(
         language === 'ar'
-          ? 'وقت البداية يجب أن يكون قبل وقت النهاية'
-          : 'Start time must be before end time'
+          ? 'الوقت يجب أن يكون بين 7 صباحاً و 8 مساءً'
+          : 'Time must be between 7 AM and 8 PM'
       );
       return;
     }
@@ -223,10 +174,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
       endTime: formData.endTime || '10:00',
       color: formData.color || (formData.type === 'section' ? '#22c55e' : '#3b82f6'),
       attachments: formData.attachments || [],
-      alarmEnabled: formData.alarmEnabled || false,
-      alarmMinutesBefore: formData.alarmMinutesBefore || 10,
-      alarmAtLectureTime: formData.alarmAtLectureTime || false,
-      notificationIds: lecture?.notificationIds,
     };
     onSave(lectureData);
   };
@@ -240,18 +187,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     'friday',
     'saturday',
   ];
-
-  const getMinutesLabel = (minutes: number): string => {
-    if (minutes < 60) {
-      return language === 'ar' ? `${minutes} د` : `${minutes}m`;
-    } else if (minutes === 60) {
-      return language === 'ar' ? '1 س' : '1h';
-    } else if (minutes === 90) {
-      return language === 'ar' ? '1.5 س' : '1.5h';
-    } else {
-      return language === 'ar' ? '2 س' : '2h';
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -354,59 +289,6 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
             )}
           </div>
 
-          <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                <Label htmlFor="alarm-enabled" className="text-base font-semibold">
-                  {language === 'ar' ? 'تفعيل المنبه' : 'Enable Alarm'}
-                </Label>
-              </div>
-              <Switch
-                id="alarm-enabled"
-                checked={formData.alarmEnabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, alarmEnabled: checked })}
-              />
-            </div>
-            
-            {formData.alarmEnabled && (
-              <div className="space-y-3 pt-2">
-                <div className="space-y-2">
-                  <Label>
-                    {language === 'ar' ? 'التنبيه قبل المحاضرة بـ' : 'Alert before lecture by'}
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    {ALARM_MINUTES_OPTIONS.map((minutes) => (
-                      <button
-                        key={minutes}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, alarmMinutesBefore: minutes })}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                          formData.alarmMinutesBefore === minutes
-                            ? 'bg-primary text-primary-foreground shadow-md'
-                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                        }`}
-                      >
-                        {getMinutesLabel(minutes)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="alarm-at-time" className="text-sm">
-                    {language === 'ar' ? 'تنبيه في موعد المحاضرة أيضاً' : 'Also alert at lecture time'}
-                  </Label>
-                  <Switch
-                    id="alarm-at-time"
-                    checked={formData.alarmAtLectureTime}
-                    onCheckedChange={(checked) => setFormData({ ...formData, alarmAtLectureTime: checked })}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="space-y-2">
             <Label>{t('attachments')}</Label>
             <div className="space-y-2">
@@ -417,24 +299,15 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
                 className="hidden"
                 id="file-upload"
               />
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                >
-                  <Paperclip className="w-4 h-4 mr-2" />
-                  {language === 'ar' ? 'إضافة ملف' : 'Add File'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCameraCapture}
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {language === 'ar' ? 'كاميرا' : 'Camera'}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => document.getElementById('file-upload')?.click()}
+              >
+                <Paperclip className="w-4 h-4 mr-2" />
+                {t('addAttachment')}
+              </Button>
               
               {formData.attachments && formData.attachments.length > 0 && (
                 <div className="space-y-2 max-h-32 overflow-y-auto">

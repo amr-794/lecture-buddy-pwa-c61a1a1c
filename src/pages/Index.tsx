@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lecture } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { saveLectures, loadLectures, loadSettings } from '@/utils/storage';
+import { saveLectures, loadLectures, loadProfileImage } from '@/utils/storage';
 import WeeklySchedule from '@/components/WeeklySchedule';
 import LectureDialog from '@/components/LectureDialog';
 import LectureDetailsDialog from '@/components/LectureDetailsDialog';
@@ -11,7 +11,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { NotificationService } from '@/services/notificationService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,30 +84,15 @@ const Index = () => {
     };
   }, []);
 
-  const handleSaveLecture = async (lecture: Lecture) => {
+  const handleSaveLecture = (lecture: Lecture) => {
     let updatedLectures: Lecture[];
     
     if (editingLecture) {
-      // Cancel old alarms if they existed
-      if (editingLecture.notificationIds && editingLecture.notificationIds.length > 0) {
-        await NotificationService.cancelAlarm(editingLecture.notificationIds);
-      }
       updatedLectures = lectures.map(l => (l.id === lecture.id ? lecture : l));
       toast.success(t('language') === 'ar' ? 'تم تحديث المحاضرة' : 'Lecture updated');
     } else {
       updatedLectures = [...lectures, lecture];
       toast.success(t('language') === 'ar' ? 'تمت إضافة المحاضرة' : 'Lecture added');
-    }
-
-    // Schedule alarm if enabled
-    if (lecture.alarmEnabled) {
-      const settings = loadSettings();
-      const notificationIds = await NotificationService.scheduleAlarm(lecture, settings);
-      if (notificationIds.length > 0) {
-        lecture.notificationIds = notificationIds;
-        // Update with notification IDs
-        updatedLectures = updatedLectures.map(l => l.id === lecture.id ? lecture : l);
-      }
     }
 
     setLectures(updatedLectures);
@@ -136,13 +120,8 @@ const Index = () => {
     setShowDeleteAlert(true);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (selectedLecture) {
-      // Cancel alarms if they exist
-      if (selectedLecture.notificationIds && selectedLecture.notificationIds.length > 0) {
-        await NotificationService.cancelAlarm(selectedLecture.notificationIds);
-      }
-      
       const updatedLectures = lectures.filter(l => l.id !== selectedLecture.id);
       setLectures(updatedLectures);
       saveLectures(updatedLectures);

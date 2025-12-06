@@ -9,10 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Share2, ExternalLink } from 'lucide-react';
-import { Share } from '@capacitor/share';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { toast } from 'sonner';
+import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink } from 'lucide-react';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -29,140 +26,63 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
 
   if (!lecture) return null;
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  const shareAttachment = async (attachment: Attachment) => {
+  const downloadAttachment = async (attachment: Attachment) => {
     try {
-      let blob: Blob | null = null;
-      
+      let url: string | null = null;
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
-        blob = await getAttachmentBlob(attachment.id);
+        const blob = await getAttachmentBlob(attachment.id);
+        if (blob) url = URL.createObjectURL(blob);
       } else if (attachment.data) {
-        const response = await fetch(attachment.data);
-        blob = await response.blob();
+        url = attachment.data;
       }
-      
-      if (!blob) {
-        toast.error(language === 'ar' ? 'فشل تحميل المرفق' : 'Failed to load attachment');
-        return;
-      }
-
-      // Convert blob to base64
-      const base64Data = await blobToBase64(blob);
-      
-      // Write file to cache directory first
-      const fileName = attachment.name || `file_${Date.now()}`;
-      
-      try {
-        await Filesystem.writeFile({
-          path: fileName,
-          data: base64Data,
-          directory: Directory.Cache,
-        });
-
-        const fileUri = await Filesystem.getUri({
-          path: fileName,
-          directory: Directory.Cache,
-        });
-
-        await Share.share({
-          title: attachment.name,
-          text: language === 'ar' ? `مشاركة: ${attachment.name}` : `Share: ${attachment.name}`,
-          url: fileUri.uri,
-          dialogTitle: language === 'ar' ? 'مشاركة المرفق' : 'Share Attachment',
-        });
-
-        toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
-      } catch (shareError) {
-        console.error('Share error:', shareError);
-        // Fallback: try web share API
-        if (navigator.share) {
-          const file = new File([blob], attachment.name, { type: blob.type });
-          await navigator.share({
-            files: [file],
-            title: attachment.name,
-          });
-          toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
-        } else {
-          toast.error(language === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
-        }
-      }
-    } catch (error) {
-      console.error('Share error:', error);
-      toast.error(language === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
-    }
+      if (!url) return;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.name;
+      link.click();
+      // Revoke if object URL
+      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
+    } catch {}
   };
-
   const openAttachment = async (attachment: Attachment) => {
     try {
-      let blob: Blob | null = null;
-      
+      let url: string | null = null;
       if (attachment.id) {
         const { getAttachmentBlob } = await import('@/utils/idb');
-        blob = await getAttachmentBlob(attachment.id);
+        const blob = await getAttachmentBlob(attachment.id);
+        if (blob) url = URL.createObjectURL(blob);
       } else if (attachment.data) {
-        const response = await fetch(attachment.data);
-        blob = await response.blob();
+        url = attachment.data;
       }
-      
-      if (!blob) {
-        toast.error(language === 'ar' ? 'فشل تحميل المرفق' : 'Failed to load attachment');
-        return;
-      }
-
-      const base64Data = await blobToBase64(blob);
-      const fileName = attachment.name || `file_${Date.now()}`;
-
-      try {
-        // Write to cache directory
-        await Filesystem.writeFile({
-          path: fileName,
-          data: base64Data,
-          directory: Directory.Cache,
-        });
-
-        const fileUri = await Filesystem.getUri({
-          path: fileName,
-          directory: Directory.Cache,
-        });
-
-        // Use Share API to open with external app (this triggers "Open with" dialog)
-        await Share.share({
-          url: fileUri.uri,
-          dialogTitle: language === 'ar' ? 'فتح بواسطة' : 'Open with',
-        });
-      } catch (fsError) {
-        console.error('Filesystem error:', fsError);
-        // Fallback: open in new tab (web)
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }
-    } catch (error) {
-      console.error('Open error:', error);
-      toast.error(language === 'ar' ? 'فشل فتح المرفق' : 'Failed to open attachment');
-    }
+      if (!url) return;
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+      if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
+    } catch {}
   };
 
-  const formatTime12Hour = (time24: string): string => {
-    const [hours, minutes] = time24.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  // Helper function to convert data URL to Blob
+  const dataURLtoBlob = (dataUrl: string): Blob => {
+    const arr = dataUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
   };
 
   return (
@@ -202,7 +122,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('startTime')}</p>
-                <p className="font-semibold">{formatTime12Hour(lecture.startTime)}</p>
+                <p className="font-semibold">{lecture.startTime}</p>
               </div>
             </div>
 
@@ -212,7 +132,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('endTime')}</p>
-                <p className="font-semibold">{formatTime12Hour(lecture.endTime)}</p>
+                <p className="font-semibold">{lecture.endTime}</p>
               </div>
             </div>
 
@@ -252,7 +172,6 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => openAttachment(attachment)}
-                          title={language === 'ar' ? 'فتح' : 'Open'}
                         >
                           <ExternalLink className="w-4 h-4" />
                         </Button>
@@ -261,10 +180,9 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => shareAttachment(attachment)}
-                          title={language === 'ar' ? 'مشاركة' : 'Share'}
+                          onClick={() => downloadAttachment(attachment)}
                         >
-                          <Share2 className="w-4 h-4" />
+                          <Download className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>

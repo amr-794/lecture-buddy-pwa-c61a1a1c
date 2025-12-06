@@ -13,14 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X } from 'lucide-react';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 import { useNavigate } from 'react-router-dom';
-import { loadLectures, saveLectures, loadSettings, saveSettings, loadBackups, saveBackups } from '@/utils/storage';
-import { Backup, Settings as SettingsType } from '@/types';
+import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage, loadBackups, saveBackups } from '@/utils/storage';
+import { Backup } from '@/types';
 import { toast } from 'sonner';
-import { NotificationService } from '@/services/notificationService';
-import AlarmSettingsCard from '@/components/AlarmSettingsCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +33,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 
 const Settings: React.FC = () => {
@@ -49,16 +46,18 @@ const Settings: React.FC = () => {
   const [currentTheme, setCurrentTheme] = React.useState<string>('default');
   const [backups, setBackups] = React.useState<Backup[]>([]);
   const [showExportDialog, setShowExportDialog] = React.useState(false);
+  const [showBackupDialog, setShowBackupDialog] = React.useState(false);
   const [showApplyBackupAlert, setShowApplyBackupAlert] = React.useState(false);
   const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
   const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
   const [editingBackupName, setEditingBackupName] = React.useState('');
-  const [settings, setSettings] = React.useState<SettingsType>(loadSettings());
-  const [hasNotificationPermission, setHasNotificationPermission] = React.useState(false);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
     setDarkMode(isDark);
+    
+    const savedProfileImage = loadProfileImage();
+    setProfileImage(savedProfileImage);
 
     const savedTheme = localStorage.getItem('appTheme') || 'default';
     setCurrentTheme(savedTheme);
@@ -66,21 +65,13 @@ const Settings: React.FC = () => {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
 
+    // Load profile image from IDB (with legacy migration)
     (async () => {
       const { migrateLegacyProfileBase64IfAny, getProfileImageURL } = await import('@/utils/idb');
       await migrateLegacyProfileBase64IfAny();
       const url = await getProfileImageURL();
       setProfileImage(url);
-      
-      const hasPermission = await NotificationService.checkPermissions();
-      setHasNotificationPermission(hasPermission);
-      
-      // Create notification channel on Android
-      await NotificationService.createNotificationChannel();
     })();
-    
-    const loadedBackups = loadBackups();
-    setBackups(loadedBackups);
   }, []);
 
   const toggleDarkMode = (checked: boolean) => {
@@ -94,68 +85,40 @@ const Settings: React.FC = () => {
   };
 
   const handleExportWithChoice = async (includeAttachments: boolean) => {
-    try {
-      const lectures = loadLectures();
-      let dataToExport = lectures.map(l => ({ ...l }));
+    const lectures = loadLectures();
+    let dataToExport = lectures.map(l => ({ ...l }));
 
-      if (!includeAttachments) {
-        dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
-      } else {
-        const { getAttachmentAsDataURL } = await import('@/utils/idb');
-        for (const lec of dataToExport) {
-          if (lec.attachments && lec.attachments.length) {
-            const transformed = [] as any[];
-            for (const att of lec.attachments) {
-              if (att.id) {
-                const dataUrl = await getAttachmentAsDataURL(att.id);
-                if (dataUrl) transformed.push({ ...att, data: dataUrl });
-              } else if (att.data) {
-                transformed.push(att);
-              }
+    if (!includeAttachments) {
+      dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
+    } else {
+      // Fetch blobs from IDB and convert to base64 for export
+      const { getAttachmentAsDataURL } = await import('@/utils/idb');
+      for (const lec of dataToExport) {
+        if (lec.attachments && lec.attachments.length) {
+          const transformed = [] as any[];
+          for (const att of lec.attachments) {
+            if (att.id) {
+              const dataUrl = await getAttachmentAsDataURL(att.id);
+              if (dataUrl) transformed.push({ ...att, data: dataUrl });
+            } else if (att.data) {
+              transformed.push(att);
             }
-            lec.attachments = transformed as any;
           }
+          lec.attachments = transformed as any;
         }
-      }
-
-      const dataStr = JSON.stringify(dataToExport, null, 2);
-      const fileName = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
-      const base64Data = btoa(unescape(encodeURIComponent(dataStr)));
-
-      // Use Share API to let user choose where to save
-      await Share.share({
-        title: fileName,
-        text: language === 'ar' ? 'تصدير البيانات' : 'Export Data',
-        url: `data:application/json;base64,${base64Data}`,
-        dialogTitle: language === 'ar' ? 'حفظ ملف التصدير' : 'Save Export File',
-      });
-
-      setShowExportDialog(false);
-      toast.success(language === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
-    } catch (error) {
-      console.error('Export error:', error);
-      
-      // Fallback: download via browser
-      try {
-        const lectures = loadLectures();
-        let dataToExport = lectures.map(l => ({ ...l }));
-        if (!includeAttachments) {
-          dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
-        }
-        const dataStr = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setShowExportDialog(false);
-        toast.success(language === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
-      } catch (fallbackError) {
-        toast.error(language === 'ar' ? 'فشل تصدير البيانات' : 'Failed to export data');
       }
     }
+
+    const dataStr = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setShowExportDialog(false);
+    toast.success(t('language') === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
   };
 
   const handleImportClick = () => {
@@ -172,7 +135,7 @@ const Settings: React.FC = () => {
             setImportedData(data);
             setShowImportAlert(true);
           } catch (error) {
-            toast.error(language === 'ar' ? 'ملف غير صالح' : 'Invalid file');
+            toast.error(t('language') === 'ar' ? 'ملف غير صالح' : 'Invalid file');
           }
         };
         reader.readAsText(file);
@@ -185,7 +148,7 @@ const Settings: React.FC = () => {
     if (importedData) {
       saveLectures(importedData);
       setShowImportAlert(false);
-      toast.success(language === 'ar' ? 'تم استيراد البيانات' : 'Data imported');
+      toast.success(t('language') === 'ar' ? 'تم استيراد البيانات' : 'Data imported');
       setTimeout(() => window.location.reload(), 500);
     }
   };
@@ -193,7 +156,7 @@ const Settings: React.FC = () => {
   const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const MAX_IMAGE_SIZE = 100 * 1024 * 1024;
+      const MAX_IMAGE_SIZE = 100 * 1024 * 1024; // 100MB
       
       if (file.size > MAX_IMAGE_SIZE) {
         toast.error(
@@ -208,10 +171,11 @@ const Settings: React.FC = () => {
         const { setProfileImageFile } = await import('@/utils/idb');
         const url = await setProfileImageFile(file);
         setProfileImage(url);
+        // Dispatch custom event for PWA
         window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
           detail: { type: 'profileImageUpdated', image: url } 
         }));
-        toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية' : 'Profile image updated');
+        toast.success(t('language') === 'ar' ? 'تم تحديث الصورة الشخصية' : 'Profile image updated');
       } catch (e) {
         toast.error(language === 'ar' ? 'فشل حفظ الصورة' : 'Failed to save image');
       }
@@ -224,14 +188,16 @@ const Settings: React.FC = () => {
       const { deleteProfileImageIDB } = await import('@/utils/idb');
       await deleteProfileImageIDB();
     } catch {
-      localStorage.removeItem('profileImage');
+      // fallback: remove legacy
+      deleteProfileImage();
     }
     
+    // Dispatch custom event for PWA
     window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
       detail: { type: 'profileImageUpdated', image: null } 
     }));
     
-    toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile image deleted');
+    toast.success(t('language') === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile image deleted');
   };
 
   const themes = [
@@ -264,7 +230,7 @@ const Settings: React.FC = () => {
     const lectures = loadLectures();
     const newBackup: Backup = {
       id: Date.now().toString(),
-      name: `${language === 'ar' ? 'نسخة احتياطية' : 'Backup'} ${backups.length + 1}`,
+      name: `${t('language') === 'ar' ? 'نسخة احتياطية' : 'Backup'} ${backups.length + 1}`,
       date: new Date().toISOString(),
       lectures,
     };
@@ -272,7 +238,7 @@ const Settings: React.FC = () => {
     const updatedBackups = [...backups, newBackup];
     setBackups(updatedBackups);
     saveBackups(updatedBackups);
-    toast.success(language === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created');
+    toast.success(t('language') === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created');
   };
 
   const applyBackup = (backup: Backup) => {
@@ -284,66 +250,21 @@ const Settings: React.FC = () => {
     if (selectedBackup) {
       saveLectures(selectedBackup.lectures);
       setShowApplyBackupAlert(false);
-      toast.success(language === 'ar' ? 'تم تطبيق النسخة الاحتياطية' : 'Backup applied');
+      toast.success(t('language') === 'ar' ? 'تم تطبيق النسخة الاحتياطية' : 'Backup applied');
       setTimeout(() => window.location.reload(), 500);
     }
   };
 
-  const shareBackup = async (backup: Backup) => {
-    try {
-      const dataStr = JSON.stringify(backup.lectures, null, 2);
-      const fileName = `${backup.name}-${new Date().toISOString().split('T')[0]}.json`;
-      const base64Data = btoa(unescape(encodeURIComponent(dataStr)));
-
-      // Write to cache first then share
-      try {
-        await Filesystem.writeFile({
-          path: fileName,
-          data: base64Data,
-          directory: Directory.Cache,
-        });
-
-        const fileUri = await Filesystem.getUri({
-          path: fileName,
-          directory: Directory.Cache,
-        });
-
-        await Share.share({
-          title: backup.name,
-          text: language === 'ar' ? `نسخة احتياطية: ${backup.name}` : `Backup: ${backup.name}`,
-          url: fileUri.uri,
-          dialogTitle: language === 'ar' ? 'مشاركة النسخة الاحتياطية' : 'Share Backup',
-        });
-
-        toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
-      } catch (fsError) {
-        // Fallback: use data URL
-        await Share.share({
-          title: backup.name,
-          text: language === 'ar' ? `نسخة احتياطية: ${backup.name}` : `Backup: ${backup.name}`,
-          url: `data:application/json;base64,${base64Data}`,
-          dialogTitle: language === 'ar' ? 'مشاركة النسخة الاحتياطية' : 'Share Backup',
-        });
-        toast.success(language === 'ar' ? 'تمت المشاركة' : 'Shared successfully');
-      }
-    } catch (error) {
-      console.error('Share error:', error);
-      
-      // Final fallback: download
-      try {
-        const dataStr = JSON.stringify(backup.lectures, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${backup.name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success(language === 'ar' ? 'تم التنزيل' : 'Downloaded');
-      } catch {
-        toast.error(language === 'ar' ? 'فشلت المشاركة' : 'Failed to share');
-      }
-    }
+  const shareBackup = (backup: Backup) => {
+    const dataStr = JSON.stringify(backup.lectures, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${backup.name}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(t('language') === 'ar' ? 'تم تصدير النسخة' : 'Backup exported');
   };
 
   const [deleteStep, setDeleteStep] = React.useState<0 | 1 | 2>(0);
@@ -363,7 +284,7 @@ const Settings: React.FC = () => {
     saveBackups(updatedBackups);
     setDeleteStep(0);
     setBackupToDelete(null);
-    toast.success(language === 'ar' ? 'تم حذف النسخة' : 'Backup deleted');
+    toast.success(t('language') === 'ar' ? 'تم حذف النسخة' : 'Backup deleted');
   };
 
   const startRenameBackup = (backup: Backup) => {
@@ -378,7 +299,7 @@ const Settings: React.FC = () => {
     setBackups(updatedBackups);
     saveBackups(updatedBackups);
     setEditingBackupId(null);
-    toast.success(language === 'ar' ? 'تم تحديث الاسم' : 'Name updated');
+    toast.success(t('language') === 'ar' ? 'تم تحديث الاسم' : 'Name updated');
   };
 
   return (
@@ -400,7 +321,7 @@ const Settings: React.FC = () => {
           <Card className="shadow-lg animate-slide-up">
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">
-                {language === 'ar' ? 'الصورة الشخصية' : 'Profile Image'}
+                {t('language') === 'ar' ? 'الصورة الشخصية' : 'Profile Image'}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -420,7 +341,7 @@ const Settings: React.FC = () => {
                     onClick={() => document.getElementById('profile-upload')?.click()}
                   >
                     <Camera className="w-4 h-4 mr-2" />
-                    {language === 'ar' ? 'تحميل صورة' : 'Upload Image'}
+                    {t('language') === 'ar' ? 'تحميل صورة' : 'Upload Image'}
                   </Button>
                   <input
                     id="profile-upload"
@@ -449,10 +370,10 @@ const Settings: React.FC = () => {
             </CardHeader>
             <CardContent>
               <Select value={language} onValueChange={(val: 'ar' | 'en') => setLanguage(val)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent position="popper" sideOffset={4} className="z-50">
+                <SelectContent>
                   <SelectItem value="ar">{t('arabic')}</SelectItem>
                   <SelectItem value="en">{t('english')}</SelectItem>
                 </SelectContent>
@@ -479,10 +400,10 @@ const Settings: React.FC = () => {
                   {language === 'ar' ? 'قالب الألوان' : 'Color Theme'}
                 </Label>
                 <Select value={currentTheme} onValueChange={handleThemeChange}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4} className="z-50">
+                  <SelectContent>
                     {themes.map(theme => (
                       <SelectItem key={theme.value} value={theme.value}>
                         {theme.label}
@@ -493,17 +414,6 @@ const Settings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-
-          <AlarmSettingsCard
-            settings={settings}
-            onSettingsChange={(newSettings) => {
-              setSettings(newSettings);
-              saveSettings(newSettings);
-            }}
-            language={language}
-            hasNotificationPermission={hasNotificationPermission}
-            onPermissionChange={setHasNotificationPermission}
-          />
 
           <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.3s' }}>
             <CardHeader>
@@ -601,7 +511,7 @@ const Settings: React.FC = () => {
           <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.4s' }}>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">
-                {language === 'ar' ? 'إدارة البيانات' : 'Data Management'}
+                {t('language') === 'ar' ? 'إدارة البيانات' : 'Data Management'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -683,7 +593,7 @@ const Settings: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmImport}>
-              {language === 'ar' ? 'استيراد' : 'Import'}
+              {t('language') === 'ar' ? 'استيراد' : 'Import'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -732,23 +642,25 @@ const Settings: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Backup delete confirmations - step 1 */}
       <AlertDialog open={deleteStep === 1} onOpenChange={(open) => setDeleteStep(open ? 1 : 0)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('confirmDeleteBackupFirst').replace('{name}', backupToDelete?.name || '')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === 'ar' ? 'ستنتقل للخطوة التالية للتأكيد النهائي' : 'You will proceed to the final confirmation step'}
+              {t('language') === 'ar' ? 'ستنتقل للخطوة التالية للتأكيد النهائي' : 'You will proceed to the final confirmation step'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeleteStep(0)}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => setDeleteStep(2)}>
-              {language === 'ar' ? 'متابعة' : 'Continue'}
+              {t('language') === 'ar' ? 'متابعة' : 'Continue'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Backup delete confirmations - step 2 (destructive) */}
       <AlertDialog open={deleteStep === 2} onOpenChange={(open) => setDeleteStep(open ? 2 : 0)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -756,7 +668,7 @@ const Settings: React.FC = () => {
               {t('confirmDeleteBackupSecond')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === 'ar' ? 'لا يمكن التراجع عن هذا الإجراء' : 'This action cannot be undone.'}
+              {t('language') === 'ar' ? 'لا يمكن التراجع عن هذا الإجراء' : 'This action cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
