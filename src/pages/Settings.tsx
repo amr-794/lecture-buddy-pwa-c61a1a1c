@@ -51,6 +51,9 @@ const Settings: React.FC = () => {
   const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
   const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
   const [editingBackupName, setEditingBackupName] = React.useState('');
+  const [showConflictAlert, setShowConflictAlert] = React.useState(false);
+  const [conflictingLecture, setConflictingLecture] = React.useState<any>(null);
+  const [importedSingleLecture, setImportedSingleLecture] = React.useState<any>(null);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -127,29 +130,94 @@ const Settings: React.FC = () => {
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (file) {
-        // Support files up to 7GB
         const MAX_IMPORT_SIZE = 7 * 1024 * 1024 * 1024;
         if (file.size > MAX_IMPORT_SIZE) {
           toast.error(language === 'ar' ? 'الملف كبير جداً. الحد الأقصى 7 جيجا' : 'File too large. Max 7GB');
           return;
         }
         try {
-          // Use streaming text for large files
           const text = await file.text();
           const data = JSON.parse(text);
-          setImportedData(data);
-          setShowImportAlert(true);
+          
+          // Check if it's a single lecture import
+          if (Array.isArray(data) && data.length === 1) {
+            const singleLecture = data[0];
+            const existingLectures = loadLectures();
+            
+            // Check for conflicts
+            const conflict = existingLectures.find((l: any) => 
+              l.day === singleLecture.day && 
+              ((singleLecture.startTime >= l.startTime && singleLecture.startTime < l.endTime) ||
+               (singleLecture.endTime > l.startTime && singleLecture.endTime <= l.endTime) ||
+               (singleLecture.startTime <= l.startTime && singleLecture.endTime >= l.endTime))
+            );
+            
+            if (conflict) {
+              setConflictingLecture(conflict);
+              setImportedSingleLecture(singleLecture);
+              setShowConflictAlert(true);
+              return;
+            }
+            
+            // No conflict, import directly
+            await importSingleLecture(singleLecture, existingLectures, null);
+          } else {
+            setImportedData(data);
+            setShowImportAlert(true);
+          }
         } catch (error) {
-          toast.error(t('language') === 'ar' ? 'ملف غير صالح' : 'Invalid file');
+          toast.error(language === 'ar' ? 'ملف غير صالح' : 'Invalid file');
         }
       }
     };
     input.click();
   };
 
+  const importSingleLecture = async (lecture: any, existingLectures: any[], replaceId: string | null) => {
+    const { addAttachment } = await import('@/utils/idb');
+    
+    let processedLecture = { ...lecture, id: crypto.randomUUID() };
+    
+    if (processedLecture.attachments && processedLecture.attachments.length) {
+      const restoredAtts = await Promise.all(processedLecture.attachments.map(async (att: any) => {
+        if (att.data && att.data.startsWith('data:')) {
+          try {
+            const res = await fetch(att.data);
+            const blob = await res.blob();
+            const file = new File([blob], att.name || 'file', { type: att.type || blob.type });
+            const saved = await addAttachment(file);
+            return { id: saved.id, name: saved.name, type: saved.type, size: saved.size };
+          } catch { return null; }
+        }
+        return att.id ? att : null;
+      }));
+      processedLecture.attachments = restoredAtts.filter(Boolean);
+    }
+    
+    let updatedLectures;
+    if (replaceId) {
+      updatedLectures = existingLectures.map((l: any) => l.id === replaceId ? processedLecture : l);
+    } else {
+      updatedLectures = [...existingLectures, processedLecture];
+    }
+    
+    saveLectures(updatedLectures);
+    toast.success(language === 'ar' ? 'تم استيراد المحاضرة' : 'Lecture imported');
+    setTimeout(() => window.location.reload(), 300);
+  };
+
+  const handleConfirmConflictReplace = async () => {
+    if (importedSingleLecture && conflictingLecture) {
+      const existingLectures = loadLectures();
+      await importSingleLecture(importedSingleLecture, existingLectures, conflictingLecture.id);
+      setShowConflictAlert(false);
+      setConflictingLecture(null);
+      setImportedSingleLecture(null);
+    }
+  };
+
   const handleConfirmImport = async () => {
     if (importedData) {
-      // Restore attachments to IDB in parallel
       const { addAttachment } = await import('@/utils/idb');
       const processedData = await Promise.all(importedData.map(async (lec: any) => {
         if (lec.attachments && lec.attachments.length) {
@@ -161,9 +229,7 @@ const Settings: React.FC = () => {
                 const file = new File([blob], att.name || 'file', { type: att.type || blob.type });
                 const saved = await addAttachment(file);
                 return { id: saved.id, name: saved.name, type: saved.type, size: saved.size };
-              } catch {
-                return null;
-              }
+              } catch { return null; }
             }
             return att.id ? att : null;
           }));
@@ -174,7 +240,7 @@ const Settings: React.FC = () => {
       
       saveLectures(processedData);
       setShowImportAlert(false);
-      toast.success(t('language') === 'ar' ? 'تم استيراد البيانات' : 'Data imported');
+      toast.success(language === 'ar' ? 'تم استيراد البيانات' : 'Data imported');
       setTimeout(() => window.location.reload(), 300);
     }
   };
@@ -701,6 +767,34 @@ const Settings: React.FC = () => {
             <AlertDialogCancel onClick={() => setDeleteStep(0)}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={completeDeleteBackup}>
               {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Conflict Alert Dialog */}
+      <AlertDialog open={showConflictAlert} onOpenChange={setShowConflictAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-orange-500">{t('conflictDetected')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('conflictMessage')}
+              {conflictingLecture && (
+                <div className="mt-2 p-2 bg-muted rounded-lg">
+                  <p className="font-semibold">{conflictingLecture.name}</p>
+                  <p className="text-xs">{conflictingLecture.startTime} - {conflictingLecture.endTime}</p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowConflictAlert(false);
+              setConflictingLecture(null);
+              setImportedSingleLecture(null);
+            }}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction className="bg-orange-500 hover:bg-orange-600" onClick={handleConfirmConflictReplace}>
+              {t('replace')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

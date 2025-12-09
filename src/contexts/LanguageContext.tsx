@@ -76,6 +76,12 @@ const translations = {
     exportWithoutAttachments: 'تصدير بدون المرفقات',
     confirmDelete: 'تأكيد الحذف',
     deleteWarning: 'هل أنت متأكد من حذف هذه المحاضرة؟',
+    exportSingleLecture: 'تصدير هذه المحاضرة',
+    openWithOtherApp: 'فتح بتطبيق آخر',
+    conflictDetected: 'تعارض موجود',
+    conflictMessage: 'هذه المحاضرة تتعارض مع محاضرة أخرى. هل تريد استبدالها؟',
+    replace: 'استبدال',
+    importSingleLecture: 'استيراد محاضرة واحدة',
   },
   en: {
     appTitle: 'My Sections',
@@ -144,6 +150,12 @@ const translations = {
     exportWithoutAttachments: 'Export without Attachments',
     confirmDelete: 'Confirm Deletion',
     deleteWarning: 'Are you sure you want to delete this lecture?',
+    exportSingleLecture: 'Export this Lecture',
+    openWithOtherApp: 'Open with Other App',
+    conflictDetected: 'Conflict Detected',
+    conflictMessage: 'This lecture conflicts with an existing one. Do you want to replace it?',
+    replace: 'Replace',
+    importSingleLecture: 'Import Single Lecture',
   },
 };
 
