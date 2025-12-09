@@ -9,7 +9,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink } from 'lucide-react';
+import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -26,7 +27,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   if (!lecture) return null;
 
@@ -47,10 +48,10 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
       link.href = url;
       link.download = attachment.name;
       link.click();
-      // Revoke if object URL
       if (attachment.id) setTimeout(() => URL.revokeObjectURL(url!), 200);
     } catch {}
   };
+
   const openAttachment = async (attachment: Attachment) => {
     try {
       let url: string | null = null;
@@ -71,18 +72,63 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
     } catch {}
   };
 
-  // Helper function to convert data URL to Blob
-  const dataURLtoBlob = (dataUrl: string): Blob => {
-    const arr = dataUrl.split(',');
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
+  // Open with other apps (native share)
+  const openWithOtherApp = async (attachment: Attachment) => {
+    try {
+      let blob: Blob | null = null;
+      if (attachment.id) {
+        const { getAttachmentBlob } = await import('@/utils/idb');
+        blob = await getAttachmentBlob(attachment.id);
+      } else if (attachment.data) {
+        const res = await fetch(attachment.data);
+        blob = await res.blob();
+      }
+      if (!blob) return;
+      
+      const file = new File([blob], attachment.name, { type: attachment.type });
+      
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        // Fallback: download and let user open
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } catch {}
+  };
+
+  // Export single lecture with attachments
+  const exportSingleLecture = async () => {
+    try {
+      const { getAttachmentAsDataURL } = await import('@/utils/idb');
+      const lectureToExport = { ...lecture };
+      
+      if (lectureToExport.attachments && lectureToExport.attachments.length) {
+        const transformedAtts = await Promise.all(
+          lectureToExport.attachments.map(async (att: any) => {
+            if (att.id) {
+              const dataUrl = await getAttachmentAsDataURL(att.id);
+              return dataUrl ? { ...att, data: dataUrl } : null;
+            }
+            return att.data ? att : null;
+          })
+        );
+        lectureToExport.attachments = transformedAtts.filter(Boolean) as any;
+      }
+
+      const dataStr = JSON.stringify([lectureToExport]);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${lecture.name}-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(language === 'ar' ? 'تم تصدير المحاضرة' : 'Lecture exported');
+    } catch {
+      toast.error(language === 'ar' ? 'فشل التصدير' : 'Export failed');
     }
-    return new Blob([u8arr], { type: mime });
   };
 
   return (
@@ -170,19 +216,31 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-7 w-7"
                           onClick={() => openAttachment(attachment)}
+                          title={language === 'ar' ? 'عرض' : 'View'}
                         >
-                          <ExternalLink className="w-4 h-4" />
+                          <ExternalLink className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
-                          onClick={() => downloadAttachment(attachment)}
+                          className="h-7 w-7"
+                          onClick={() => openWithOtherApp(attachment)}
+                          title={t('openWithOtherApp')}
                         >
-                          <Download className="w-4 h-4" />
+                          <Share2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => downloadAttachment(attachment)}
+                          title={language === 'ar' ? 'تحميل' : 'Download'}
+                        >
+                          <Download className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -193,23 +251,33 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="flex gap-2 sm:gap-2">
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
           <Button
-            variant="outline"
-            onClick={onEdit}
+            variant="secondary"
+            onClick={exportSingleLecture}
             className="flex-1"
           >
-            <Pencil className="w-4 h-4 mr-2" />
-            {t('edit')}
+            <Download className="w-4 h-4 mr-2" />
+            {t('exportSingleLecture')}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={onDelete}
-            className="flex-1"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t('delete')}
-          </Button>
+          <div className="flex gap-2 flex-1">
+            <Button
+              variant="outline"
+              onClick={onEdit}
+              className="flex-1"
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              {t('edit')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onDelete}
+              className="flex-1"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t('delete')}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
