@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Clock, Calendar, Palette, Pencil, Trash2, Paperclip, Download, ExternalLink, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LectureDetailsDialogProps {
   open: boolean;
@@ -133,129 +134,137 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] max-w-[95vw] animate-slide-up max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('lectureDetails')}</DialogTitle>
+      <DialogContent className="sm:max-w-[400px] max-w-[95vw] w-[95vw] sm:w-full animate-slide-up max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="truncate">{t('lectureDetails')}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div
-            className="w-full h-3 rounded-full"
-            style={{ backgroundColor: lecture.color }}
-          />
+        <ScrollArea className="flex-1 overflow-y-auto pr-2">
+          <div className="space-y-4">
+            <div
+              className="w-full h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: lecture.color }}
+            />
 
-          <div>
-            <h3 className="text-2xl font-bold mb-2">{lecture.name}</h3>
-            <p className="text-sm text-muted-foreground">
-              {t(lecture.type === 'lecture' ? 'lecture' : 'section')}
-            </p>
-          </div>
-
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('day')}</p>
-                <p className="font-semibold">{t(days[lecture.day])}</p>
-              </div>
+            <div className="min-w-0">
+              <h3 className="text-xl font-bold mb-2 truncate" title={lecture.name}>{lecture.name}</h3>
+              <p className="text-sm text-muted-foreground">
+                {t(lecture.type === 'lecture' ? 'lecture' : 'section')}
+              </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('startTime')}</p>
-                <p className="font-semibold">{lecture.startTime}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('endTime')}</p>
-                <p className="font-semibold">{lecture.endTime}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Palette className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('color')}</p>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-6 rounded border"
-                    style={{ backgroundColor: lecture.color }}
-                  />
-                  <p className="font-semibold text-xs">{lecture.color}</p>
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">{t('day')}</p>
+                  <p className="font-semibold">{t(days[lecture.day])}</p>
                 </div>
               </div>
-            </div>
 
-            {lecture.attachments && lecture.attachments.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center gap-2">
-                  <Paperclip className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">{t('attachments')}</p>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-primary" />
                 </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {lecture.attachments.map((attachment, index) => (
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">{t('startTime')}</p>
+                  <p className="font-semibold">{lecture.startTime}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">{t('endTime')}</p>
+                  <p className="font-semibold">{lecture.endTime}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Palette className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">{t('color')}</p>
+                  <div className="flex items-center gap-2">
                     <div
-                      key={index}
-                      className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors"
-                    >
-                      <span className="truncate flex-1">{attachment.name}</span>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openAttachment(attachment)}
-                          title={language === 'ar' ? 'عرض' : 'View'}
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openWithOtherApp(attachment)}
-                          title={t('openWithOtherApp')}
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => downloadAttachment(attachment)}
-                          title={language === 'ar' ? 'تحميل' : 'Download'}
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                      className="w-6 h-6 rounded border flex-shrink-0"
+                      style={{ backgroundColor: lecture.color }}
+                    />
+                    <p className="font-semibold text-xs truncate">{lecture.color}</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+              {lecture.attachments && lecture.attachments.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-primary flex-shrink-0" />
+                    <p className="text-sm font-semibold">{t('attachments')}</p>
+                  </div>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {lecture.attachments.map((attachment, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-colors min-w-0"
+                      >
+                        <span 
+                          className="truncate flex-1 min-w-0 max-w-[120px]" 
+                          title={attachment.name}
+                        >
+                          {attachment.name}
+                        </span>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openAttachment(attachment)}
+                            title={language === 'ar' ? 'عرض' : 'View'}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openWithOtherApp(attachment)}
+                            title={t('openWithOtherApp')}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => downloadAttachment(attachment)}
+                            title={language === 'ar' ? 'تحميل' : 'Download'}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2 flex-shrink-0 pt-2">
           <Button
             variant="secondary"
             onClick={exportSingleLecture}
             className="flex-1"
+            size="sm"
           >
             <Download className="w-4 h-4 mr-2" />
             {t('exportSingleLecture')}
@@ -265,6 +274,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               variant="outline"
               onClick={onEdit}
               className="flex-1"
+              size="sm"
             >
               <Pencil className="w-4 h-4 mr-2" />
               {t('edit')}
@@ -273,6 +283,7 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               variant="destructive"
               onClick={onDelete}
               className="flex-1"
+              size="sm"
             >
               <Trash2 className="w-4 h-4 mr-2" />
               {t('delete')}
