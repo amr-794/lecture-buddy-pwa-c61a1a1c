@@ -12,10 +12,10 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X } from 'lucide-react';
+import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X, FileDown, FileUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage, loadBackups, saveBackups } from '@/utils/storage';
-import { Backup } from '@/types';
+import { Backup, Lecture } from '@/types';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -35,6 +35,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface ConflictInfo {
+  imported: Lecture;
+  existing: Lecture;
+}
 
 const Settings: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
@@ -45,15 +52,27 @@ const Settings: React.FC = () => {
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = React.useState<string>('default');
   const [backups, setBackups] = React.useState<Backup[]>([]);
-  const [showExportDialog, setShowExportDialog] = React.useState(false);
+  
+  // Export dialogs
+  const [showExportTypeDialog, setShowExportTypeDialog] = React.useState(false);
+  const [showExportOptionsDialog, setShowExportOptionsDialog] = React.useState(false);
+  const [showSelectLectureDialog, setShowSelectLectureDialog] = React.useState(false);
+  const [selectedLectureForExport, setSelectedLectureForExport] = React.useState<string | null>(null);
+  
+  // Import dialogs
+  const [showImportTypeDialog, setShowImportTypeDialog] = React.useState(false);
+  
+  // Backup dialogs
   const [showBackupDialog, setShowBackupDialog] = React.useState(false);
   const [showApplyBackupAlert, setShowApplyBackupAlert] = React.useState(false);
   const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
   const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
   const [editingBackupName, setEditingBackupName] = React.useState('');
-  const [showConflictAlert, setShowConflictAlert] = React.useState(false);
-  const [conflictingLecture, setConflictingLecture] = React.useState<any>(null);
-  const [importedSingleLecture, setImportedSingleLecture] = React.useState<any>(null);
+  
+  // Conflict handling
+  const [showConflictsDialog, setShowConflictsDialog] = React.useState(false);
+  const [conflicts, setConflicts] = React.useState<ConflictInfo[]>([]);
+  const [nonConflictingLectures, setNonConflictingLectures] = React.useState<Lecture[]>([]);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -67,6 +86,9 @@ const Settings: React.FC = () => {
     if (savedTheme !== 'default') {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
+
+    const savedBackups = loadBackups();
+    setBackups(savedBackups);
 
     // Load profile image from IDB (with legacy migration)
     (async () => {
@@ -87,16 +109,35 @@ const Settings: React.FC = () => {
     localStorage.setItem('theme', checked ? 'dark' : 'light');
   };
 
+  // ===== EXPORT FUNCTIONS =====
+  const handleExportClick = () => {
+    setShowExportTypeDialog(true);
+  };
+
+  const handleExportFullSchedule = () => {
+    setShowExportTypeDialog(false);
+    setShowExportOptionsDialog(true);
+  };
+
+  const handleExportSingleLecture = () => {
+    const lectures = loadLectures();
+    if (lectures.length === 0) {
+      toast.error(t('noLecturesToExport'));
+      return;
+    }
+    setShowExportTypeDialog(false);
+    setShowSelectLectureDialog(true);
+  };
+
   const handleExportWithChoice = async (includeAttachments: boolean) => {
     const lectures = loadLectures();
-    let dataToExport = lectures.map(l => ({ ...l }));
+    let dataToExport = lectures.map((l: Lecture) => ({ ...l }));
 
     if (!includeAttachments) {
-      dataToExport = dataToExport.map(l => ({ ...l, attachments: [] }));
+      dataToExport = dataToExport.map((l: any) => ({ ...l, attachments: [] }));
     } else {
-      // Fetch blobs from IDB and convert to base64 for export - parallel processing
       const { getAttachmentAsDataURL } = await import('@/utils/idb');
-      await Promise.all(dataToExport.map(async (lec) => {
+      await Promise.all(dataToExport.map(async (lec: any) => {
         if (lec.attachments && lec.attachments.length) {
           const transformed = await Promise.all(lec.attachments.map(async (att: any) => {
             if (att.id) {
@@ -110,7 +151,6 @@ const Settings: React.FC = () => {
       }));
     }
 
-    // Use streaming JSON for large files (up to 7GB)
     const dataStr = JSON.stringify(dataToExport);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -119,11 +159,53 @@ const Settings: React.FC = () => {
     link.download = `my-sections-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    setShowExportDialog(false);
-    toast.success(t('language') === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
+    setShowExportOptionsDialog(false);
+    toast.success(language === 'ar' ? 'تم تصدير البيانات' : 'Data exported');
   };
 
+  const handleExportSelectedLecture = async () => {
+    if (!selectedLectureForExport) return;
+    
+    const lectures = loadLectures();
+    const lecture = lectures.find((l: Lecture) => l.id === selectedLectureForExport);
+    if (!lecture) return;
+
+    const { getAttachmentAsDataURL } = await import('@/utils/idb');
+    const lectureToExport = { ...lecture };
+    
+    if (lectureToExport.attachments && lectureToExport.attachments.length) {
+      const transformedAtts = await Promise.all(
+        lectureToExport.attachments.map(async (att: any) => {
+          if (att.id) {
+            const dataUrl = await getAttachmentAsDataURL(att.id);
+            return dataUrl ? { ...att, data: dataUrl } : null;
+          }
+          return att.data ? att : null;
+        })
+      );
+      lectureToExport.attachments = transformedAtts.filter(Boolean) as any;
+    }
+
+    const dataStr = JSON.stringify([lectureToExport]);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${lecture.name}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setShowSelectLectureDialog(false);
+    setSelectedLectureForExport(null);
+    toast.success(language === 'ar' ? 'تم تصدير المحاضرة' : 'Lecture exported');
+  };
+
+  // ===== IMPORT FUNCTIONS =====
   const handleImportClick = () => {
+    setShowImportTypeDialog(true);
+  };
+
+  const handleImportFullSchedule = () => {
+    setShowImportTypeDialog(false);
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -138,33 +220,8 @@ const Settings: React.FC = () => {
         try {
           const text = await file.text();
           const data = JSON.parse(text);
-          
-          // Check if it's a single lecture import
-          if (Array.isArray(data) && data.length === 1) {
-            const singleLecture = data[0];
-            const existingLectures = loadLectures();
-            
-            // Check for conflicts
-            const conflict = existingLectures.find((l: any) => 
-              l.day === singleLecture.day && 
-              ((singleLecture.startTime >= l.startTime && singleLecture.startTime < l.endTime) ||
-               (singleLecture.endTime > l.startTime && singleLecture.endTime <= l.endTime) ||
-               (singleLecture.startTime <= l.startTime && singleLecture.endTime >= l.endTime))
-            );
-            
-            if (conflict) {
-              setConflictingLecture(conflict);
-              setImportedSingleLecture(singleLecture);
-              setShowConflictAlert(true);
-              return;
-            }
-            
-            // No conflict, import directly
-            await importSingleLecture(singleLecture, existingLectures, null);
-          } else {
-            setImportedData(data);
-            setShowImportAlert(true);
-          }
+          setImportedData(data);
+          setShowImportAlert(true);
         } catch (error) {
           toast.error(language === 'ar' ? 'ملف غير صالح' : 'Invalid file');
         }
@@ -173,47 +230,120 @@ const Settings: React.FC = () => {
     input.click();
   };
 
-  const importSingleLecture = async (lecture: any, existingLectures: any[], replaceId: string | null) => {
-    const { addAttachment } = await import('@/utils/idb');
-    
-    let processedLecture = { ...lecture, id: crypto.randomUUID() };
-    
-    if (processedLecture.attachments && processedLecture.attachments.length) {
-      const restoredAtts = await Promise.all(processedLecture.attachments.map(async (att: any) => {
-        if (att.data && att.data.startsWith('data:')) {
-          try {
-            const res = await fetch(att.data);
-            const blob = await res.blob();
-            const file = new File([blob], att.name || 'file', { type: att.type || blob.type });
-            const saved = await addAttachment(file);
-            return { id: saved.id, name: saved.name, type: saved.type, size: saved.size };
-          } catch { return null; }
+  const handleImportSingleLectures = () => {
+    setShowImportTypeDialog(false);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.multiple = true;
+    input.onchange = async (e: any) => {
+      const files = Array.from(e.target.files) as File[];
+      if (files.length === 0) return;
+      
+      const MAX_IMPORT_SIZE = 7 * 1024 * 1024 * 1024;
+      
+      try {
+        const allLectures: Lecture[] = [];
+        
+        // Parse all files in parallel
+        await Promise.all(files.map(async (file) => {
+          if (file.size > MAX_IMPORT_SIZE) {
+            throw new Error('File too large');
+          }
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (Array.isArray(data)) {
+            allLectures.push(...data);
+          } else {
+            allLectures.push(data);
+          }
+        }));
+
+        const existingLectures = loadLectures();
+        const conflictsList: ConflictInfo[] = [];
+        const nonConflicting: Lecture[] = [];
+
+        // Check conflicts for each imported lecture
+        for (const imported of allLectures) {
+          const conflict = existingLectures.find((existing: Lecture) => 
+            existing.day === imported.day && 
+            ((imported.startTime >= existing.startTime && imported.startTime < existing.endTime) ||
+             (imported.endTime > existing.startTime && imported.endTime <= existing.endTime) ||
+             (imported.startTime <= existing.startTime && imported.endTime >= existing.endTime))
+          );
+          
+          if (conflict) {
+            conflictsList.push({ imported, existing: conflict });
+          } else {
+            nonConflicting.push(imported);
+          }
         }
-        return att.id ? att : null;
-      }));
-      processedLecture.attachments = restoredAtts.filter(Boolean);
-    }
+
+        if (conflictsList.length > 0) {
+          setConflicts(conflictsList);
+          setNonConflictingLectures(nonConflicting);
+          setShowConflictsDialog(true);
+        } else {
+          // No conflicts, import all directly
+          await importLectures(allLectures, []);
+        }
+      } catch (error) {
+        toast.error(language === 'ar' ? 'ملف غير صالح' : 'Invalid file');
+      }
+    };
+    input.click();
+  };
+
+  const importLectures = async (lectures: Lecture[], replaceIds: string[]) => {
+    const { addAttachment } = await import('@/utils/idb');
+    const existingLectures = loadLectures();
     
-    let updatedLectures;
-    if (replaceId) {
-      updatedLectures = existingLectures.map((l: any) => l.id === replaceId ? processedLecture : l);
-    } else {
-      updatedLectures = [...existingLectures, processedLecture];
-    }
+    // Remove lectures that will be replaced
+    let updatedLectures = existingLectures.filter((l: Lecture) => !replaceIds.includes(l.id));
     
+    // Process and add new lectures in parallel
+    const processedLectures = await Promise.all(lectures.map(async (lecture) => {
+      let processedLecture = { ...lecture, id: crypto.randomUUID() };
+      
+      if (processedLecture.attachments && processedLecture.attachments.length) {
+        const restoredAtts = await Promise.all(processedLecture.attachments.map(async (att: any) => {
+          if (att.data && att.data.startsWith('data:')) {
+            try {
+              const res = await fetch(att.data);
+              const blob = await res.blob();
+              const file = new File([blob], att.name || 'file', { type: att.type || blob.type });
+              const saved = await addAttachment(file);
+              return { id: saved.id, name: saved.name, type: saved.type, size: saved.size };
+            } catch { return null; }
+          }
+          return att.id ? att : null;
+        }));
+        processedLecture.attachments = restoredAtts.filter(Boolean);
+      }
+      
+      return processedLecture;
+    }));
+    
+    updatedLectures = [...updatedLectures, ...processedLectures];
     saveLectures(updatedLectures);
-    toast.success(language === 'ar' ? 'تم استيراد المحاضرة' : 'Lecture imported');
+    toast.success(t('lecturesImported'));
     setTimeout(() => window.location.reload(), 300);
   };
 
-  const handleConfirmConflictReplace = async () => {
-    if (importedSingleLecture && conflictingLecture) {
-      const existingLectures = loadLectures();
-      await importSingleLecture(importedSingleLecture, existingLectures, conflictingLecture.id);
-      setShowConflictAlert(false);
-      setConflictingLecture(null);
-      setImportedSingleLecture(null);
-    }
+  const handleReplaceAllConflicts = async () => {
+    const allLectures = [...nonConflictingLectures, ...conflicts.map(c => c.imported)];
+    const replaceIds = conflicts.map(c => c.existing.id);
+    await importLectures(allLectures, replaceIds);
+    setShowConflictsDialog(false);
+    setConflicts([]);
+    setNonConflictingLectures([]);
+  };
+
+  const handleSkipConflicts = async () => {
+    await importLectures(nonConflictingLectures, []);
+    setShowConflictsDialog(false);
+    setConflicts([]);
+    setNonConflictingLectures([]);
   };
 
   const handleConfirmImport = async () => {
@@ -248,7 +378,7 @@ const Settings: React.FC = () => {
   const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const MAX_IMAGE_SIZE = 100 * 1024 * 1024; // 100MB
+      const MAX_IMAGE_SIZE = 100 * 1024 * 1024;
       
       if (file.size > MAX_IMAGE_SIZE) {
         toast.error(
@@ -263,7 +393,6 @@ const Settings: React.FC = () => {
         const { setProfileImageFile } = await import('@/utils/idb');
         const url = await setProfileImageFile(file);
         setProfileImage(url);
-        // Dispatch custom event for PWA
         window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
           detail: { type: 'profileImageUpdated', image: url } 
         }));
@@ -280,11 +409,9 @@ const Settings: React.FC = () => {
       const { deleteProfileImageIDB } = await import('@/utils/idb');
       await deleteProfileImageIDB();
     } catch {
-      // fallback: remove legacy
       deleteProfileImage();
     }
     
-    // Dispatch custom event for PWA
     window.dispatchEvent(new CustomEvent('profileImageUpdate', { 
       detail: { type: 'profileImageUpdated', image: null } 
     }));
@@ -393,6 +520,9 @@ const Settings: React.FC = () => {
     setEditingBackupId(null);
     toast.success(t('language') === 'ar' ? 'تم تحديث الاسم' : 'Name updated');
   };
+
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const allLectures = loadLectures();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 p-3 sm:p-4">
@@ -608,7 +738,7 @@ const Settings: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                onClick={() => setShowExportDialog(true)}
+                onClick={handleExportClick}
                 variant="outline"
                 className="w-full justify-start text-sm sm:text-base"
               >
@@ -674,41 +804,35 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      <AlertDialog open={showImportAlert} onOpenChange={setShowImportAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('confirmImport')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('importWarning')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmImport}>
-              {t('language') === 'ar' ? 'استيراد' : 'Import'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Export Type Dialog */}
+      <Dialog open={showExportTypeDialog} onOpenChange={setShowExportTypeDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t('selectExportType')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              onClick={handleExportFullSchedule}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              {t('exportFullSchedule')}
+            </Button>
+            <Button
+              onClick={handleExportSingleLecture}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {t('exportSingleLectureOption')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-      <AlertDialog open={showApplyBackupAlert} onOpenChange={setShowApplyBackupAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('confirmBackupApply')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('backupWarning')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmApplyBackup}>
-              {t('applyBackup')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+      {/* Export Options Dialog (with/without attachments) */}
+      <Dialog open={showExportOptionsDialog} onOpenChange={setShowExportOptionsDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('exportData')}</DialogTitle>
@@ -733,6 +857,182 @@ const Settings: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Select Lecture to Export Dialog */}
+      <Dialog open={showSelectLectureDialog} onOpenChange={setShowSelectLectureDialog}>
+        <DialogContent className="sm:max-w-[450px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{t('selectLectureToExport')}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-2 pr-2">
+              {allLectures.map((lecture: Lecture) => (
+                <div
+                  key={lecture.id}
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                    selectedLectureForExport === lecture.id 
+                      ? 'border-primary bg-primary/10' 
+                      : 'border-border hover:bg-muted'
+                  }`}
+                  onClick={() => setSelectedLectureForExport(lecture.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: lecture.color }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate">{lecture.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t(days[lecture.day])} • {lecture.startTime} - {lecture.endTime}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSelectLectureDialog(false)}>
+              {t('cancel')}
+            </Button>
+            <Button 
+              onClick={handleExportSelectedLecture}
+              disabled={!selectedLectureForExport}
+            >
+              {t('exportData')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Type Dialog */}
+      <Dialog open={showImportTypeDialog} onOpenChange={setShowImportTypeDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t('selectImportType')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              onClick={handleImportFullSchedule}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <FileUp className="w-4 h-4 mr-2" />
+              {t('importFullSchedule')}
+            </Button>
+            <Button
+              onClick={handleImportSingleLectures}
+              variant="outline"
+              className="w-full justify-start flex-col items-start h-auto py-3"
+            >
+              <div className="flex items-center">
+                <Upload className="w-4 h-4 mr-2" />
+                {t('importSingleLectureOption')}
+              </div>
+              <span className="text-xs text-muted-foreground mt-1">
+                {t('selectFiles')}
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full Schedule Import Alert */}
+      <AlertDialog open={showImportAlert} onOpenChange={setShowImportAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmImport')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('importWarning')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmImport}>
+              {t('language') === 'ar' ? 'استيراد' : 'Import'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Conflicts Dialog */}
+      <Dialog open={showConflictsDialog} onOpenChange={setShowConflictsDialog}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-orange-500">{t('multipleConflictsDetected')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t('conflictsDetails')}</p>
+            <ScrollArea className="max-h-[40vh]">
+              <div className="space-y-3 pr-2">
+                {conflicts.map((conflict, index) => (
+                  <div key={index} className="p-3 bg-muted rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: conflict.imported.color }}
+                      />
+                      <span className="font-semibold text-sm truncate">{conflict.imported.name}</span>
+                    </div>
+                    <p className="text-xs text-orange-500">
+                      {t('conflictsWith')}:
+                    </p>
+                    <div className="flex items-center gap-2 pl-2">
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: conflict.existing.color }}
+                      />
+                      <span className="text-sm truncate">{conflict.existing.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({t(days[conflict.existing.day])} {conflict.existing.startTime})
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            {nonConflictingLectures.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' 
+                  ? `${nonConflictingLectures.length} محاضرات بدون تعارض سيتم استيرادها`
+                  : `${nonConflictingLectures.length} non-conflicting lectures will be imported`
+                }
+              </p>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowConflictsDialog(false)}>
+              {t('cancel')}
+            </Button>
+            {nonConflictingLectures.length > 0 && (
+              <Button variant="secondary" onClick={handleSkipConflicts}>
+                {t('skipConflicts')}
+              </Button>
+            )}
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleReplaceAllConflicts}>
+              {t('replaceAll')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showApplyBackupAlert} onOpenChange={setShowApplyBackupAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmBackupApply')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('backupWarning')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmApplyBackup}>
+              {t('applyBackup')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Backup delete confirmations - step 1 */}
       <AlertDialog open={deleteStep === 1} onOpenChange={(open) => setDeleteStep(open ? 1 : 0)}>
@@ -767,34 +1067,6 @@ const Settings: React.FC = () => {
             <AlertDialogCancel onClick={() => setDeleteStep(0)}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={completeDeleteBackup}>
               {t('delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Conflict Alert Dialog */}
-      <AlertDialog open={showConflictAlert} onOpenChange={setShowConflictAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-orange-500">{t('conflictDetected')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('conflictMessage')}
-              {conflictingLecture && (
-                <div className="mt-2 p-2 bg-muted rounded-lg">
-                  <p className="font-semibold">{conflictingLecture.name}</p>
-                  <p className="text-xs">{conflictingLecture.startTime} - {conflictingLecture.endTime}</p>
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setShowConflictAlert(false);
-              setConflictingLecture(null);
-              setImportedSingleLecture(null);
-            }}>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction className="bg-orange-500 hover:bg-orange-600" onClick={handleConfirmConflictReplace}>
-              {t('replace')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
