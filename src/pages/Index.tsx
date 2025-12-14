@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lecture } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLectureNotifications } from '@/hooks/use-lecture-notifications';
 import { saveLectures, loadLectures, loadProfileImage } from '@/utils/storage';
 import WeeklySchedule from '@/components/WeeklySchedule';
 import LectureDialog from '@/components/LectureDialog';
@@ -32,6 +33,8 @@ const Index = () => {
   const [editingLecture, setEditingLecture] = useState<Lecture | null>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+
+  useLectureNotifications(lectures);
 
   useEffect(() => {
     const loadedLectures = loadLectures();

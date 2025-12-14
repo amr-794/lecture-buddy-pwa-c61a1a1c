@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
+import { LectureNotificationSettings, loadNotificationSettings, saveNotificationSettings } from '@/hooks/use-lecture-notifications';
 
 interface ConflictInfo {
   imported: Lecture;
@@ -74,6 +75,12 @@ const Settings: React.FC = () => {
   const [conflicts, setConflicts] = React.useState<ConflictInfo[]>([]);
   const [nonConflictingLectures, setNonConflictingLectures] = React.useState<Lecture[]>([]);
 
+  // Notification settings
+  const [notificationSettings, setNotificationSettings] = React.useState<LectureNotificationSettings>({
+    enabled: true,
+    minutesBefore: 10,
+  });
+
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
     setDarkMode(isDark);
@@ -89,6 +96,9 @@ const Settings: React.FC = () => {
 
     const savedBackups = loadBackups();
     setBackups(savedBackups);
+
+    const currentNotif = loadNotificationSettings();
+    setNotificationSettings(currentNotif);
 
     // Load profile image from IDB (with legacy migration)
     (async () => {
@@ -107,6 +117,12 @@ const Settings: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
     localStorage.setItem('theme', checked ? 'dark' : 'light');
+  };
+
+  const handleNotificationToggle = (enabled: boolean) => {
+    const updated = { ...notificationSettings, enabled };
+    setNotificationSettings(updated);
+    saveNotificationSettings(updated);
   };
 
   // ===== EXPORT FUNCTIONS =====
@@ -151,8 +167,16 @@ const Settings: React.FC = () => {
       }));
     }
 
-    const dataStr = JSON.stringify(dataToExport);
-    const blob = new Blob([dataStr], { type: 'application/json' });
+    // Build JSON in chunks to reduce memory spikes for very large exports
+    const blobParts: BlobPart[] = ['['];
+    dataToExport.forEach((lec: any, index: number) => {
+      const json = JSON.stringify(lec);
+      blobParts.push(json);
+      if (index < dataToExport.length - 1) blobParts.push(',');
+    });
+    blobParts.push(']');
+
+    const blob = new Blob(blobParts, { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -634,6 +658,29 @@ const Settings: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg animate-slide-up" style={{ animationDelay: '0.25s' }}>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">{t('notificationSettings')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="lecture-notifications" className="text-sm sm:text-base">
+                  {language === 'ar' ? 'تنبيه قبل المحاضرة بـ 10 دقائق' : 'Notify 10 minutes before lecture'}
+                </Label>
+                <Switch
+                  id="lecture-notifications"
+                  checked={notificationSettings.enabled}
+                  onCheckedChange={handleNotificationToggle}
+                />
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {language === 'ar'
+                  ? 'يتم تشغيل نغمة منبه مخصصة مع اهتزاز متتالي قبل بداية المحاضرة بـ 10 دقائق أثناء فتح التطبيق.'
+                  : 'A custom gentle alarm tone with cascading vibration plays 10 minutes before the lecture while the app is open.'}
+              </p>
             </CardContent>
           </Card>
 

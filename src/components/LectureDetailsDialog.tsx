@@ -276,6 +276,15 @@ const LectureDetailsDialog: React.FC<LectureDetailsDialogProps> = ({
               className="flex-1"
               size="sm"
             >
+              <Paperclip className="w-4 h-4 mr-2" />
+              {t('addAttachment')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onEdit}
+              className="flex-1"
+              size="sm"
+            >
               <Pencil className="w-4 h-4 mr-2" />
               {t('edit')}
             </Button>
