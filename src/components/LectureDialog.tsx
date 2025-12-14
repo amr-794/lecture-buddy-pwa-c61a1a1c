@@ -71,15 +71,16 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
     const files = e.target.files;
     if (!files) return;
 
-    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    // Allow very large files up to 7GB (browser/storage limits may still apply)
+    const MAX_FILE_SIZE = 7 * 1024 * 1024 * 1024; // 7GB
 
     const arr = Array.from(files);
     for (const file of arr) {
       if (file.size > MAX_FILE_SIZE) {
         toast.error(
           language === 'ar'
-            ? `الملف ${file.name} كبير جداً. الحد الأقصى 100 ميجا`
-            : `File ${file.name} is too large. Maximum 100MB`
+            ? `الملف ${file.name} كبير جداً. الحد الأقصى 7 جيجا`
+            : `File ${file.name} is too large. Maximum 7GB`
         );
         continue;
       }
@@ -316,7 +317,12 @@ const LectureDialog: React.FC<LectureDialogProps> = ({
                       key={index}
                       className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
                     >
-                      <span className="truncate flex-1">{attachment.name}</span>
+                      <span
+                        className="truncate flex-1 min-w-0 max-w-[120px]"
+                        title={attachment.name}
+                      >
+                        {attachment.name}
+                      </span>
                       <Button
                         type="button"
                         variant="ghost"
