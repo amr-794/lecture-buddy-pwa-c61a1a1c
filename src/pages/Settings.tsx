@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { LectureNotificationSettings, loadNotificationSettings, saveNotificationSettings, testNotification, playCustomAlarmTone, vibratePattern } from '@/hooks/use-lecture-notifications';
+import { LectureNotificationSettings, loadNotificationSettings, saveNotificationSettings, testNotification, vibratePattern } from '@/hooks/use-lecture-notifications';
 
 interface ConflictInfo {
   imported: Lecture;
