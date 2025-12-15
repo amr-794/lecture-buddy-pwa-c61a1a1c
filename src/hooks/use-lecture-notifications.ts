@@ -103,23 +103,29 @@ export const vibratePattern = () => {
   }
 };
 
-// Send web notification
+// Send web notification - uses system notification sound (ringer volume, not media)
 const sendNotification = (title: string, body: string) => {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { 
+      const notification = new Notification(title, { 
         body, 
         icon: '/icon-192.png',
         tag: `lecture-${Date.now()}`,
-        requireInteraction: true
+        requireInteraction: true,
+        silent: false, // Use system notification sound (ringer volume)
       });
+      
+      // Vibrate when notification shows
+      notification.onshow = () => {
+        vibratePattern();
+      };
     }
   } catch {
     // ignore
   }
 };
 
-// Test notification function
+// Test notification function - uses system sound
 export const testNotification = async () => {
   const permitted = await requestNotificationPermission();
   if (!permitted) {
@@ -127,11 +133,10 @@ export const testNotification = async () => {
   }
   
   sendNotification(
-    'Test Notification',
-    'This is a test notification with sound and vibration!'
+    'اختبار الإشعار - Test',
+    'هذا إشعار تجريبي! This is a test notification!'
   );
   
-  playCustomAlarmTone();
   vibratePattern();
   
   return true;
@@ -184,8 +189,6 @@ export const useLectureNotifications = (lectures: Lecture[]) => {
             }
 
             sendNotification(title, body);
-            vibratePattern();
-            playCustomAlarmTone();
           }
         }
       }
