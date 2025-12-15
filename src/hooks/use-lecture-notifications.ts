@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Lecture } from '@/types';
-import { LocalNotifications } from '@capacitor/local-notifications';
 
 export interface LectureNotificationSettings {
   enabled: boolean;
@@ -34,28 +33,14 @@ export const saveNotificationSettings = (settings: LectureNotificationSettings) 
 };
 
 const requestNotificationPermission = async (): Promise<boolean> => {
-  // Try Capacitor local notifications first (for background support)
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
   try {
-    const { display } = await LocalNotifications.checkPermissions();
-    if (display === 'granted') return true;
-    if (display === 'denied') {
-      // Fall back to web notifications
-      if ('Notification' in window && Notification.permission === 'granted') return true;
-      return false;
-    }
-    const result = await LocalNotifications.requestPermissions();
-    return result.display === 'granted';
+    const res = await Notification.requestPermission();
+    return res === 'granted';
   } catch {
-    // Capacitor not available, use web notifications
-    if (typeof window === 'undefined' || !('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission === 'denied') return false;
-    try {
-      const res = await Notification.requestPermission();
-      return res === 'granted';
-    } catch {
-      return false;
-    }
+    return false;
   }
 };
 
@@ -118,100 +103,19 @@ export const vibratePattern = () => {
   }
 };
 
-// Schedule background notifications using Capacitor
-const scheduleCapacitorNotifications = async (lectures: Lecture[]) => {
+// Send web notification
+const sendNotification = (title: string, body: string) => {
   try {
-    // Cancel existing scheduled notifications
-    const pending = await LocalNotifications.getPending();
-    if (pending.notifications.length > 0) {
-      await LocalNotifications.cancel({ notifications: pending.notifications });
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { 
+        body, 
+        icon: '/icon-192.png',
+        tag: `lecture-${Date.now()}`,
+        requireInteraction: true
+      });
     }
-
-    const settings = loadNotificationSettings();
-    if (!settings.enabled) return;
-
-    const now = new Date();
-    const notifications: any[] = [];
-    let notificationId = 1;
-
-    // Schedule for today and next 7 days
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const targetDate = new Date(now);
-      targetDate.setDate(now.getDate() + dayOffset);
-      const dayIndex = targetDate.getDay();
-
-      for (const lecture of lectures) {
-        if (lecture.day !== dayIndex) continue;
-
-        const [h, m] = lecture.startTime.split(':').map(Number);
-        
-        // Schedule for 10 minutes before
-        const tenMinBefore = new Date(targetDate);
-        tenMinBefore.setHours(h, m - 10, 0, 0);
-        
-        // Schedule for 5 minutes before
-        const fiveMinBefore = new Date(targetDate);
-        fiveMinBefore.setHours(h, m - 5, 0, 0);
-        
-        // Schedule for lecture start
-        const atStart = new Date(targetDate);
-        atStart.setHours(h, m, 0, 0);
-
-        const times = [
-          { time: tenMinBefore, body: '10 minutes remaining' },
-          { time: fiveMinBefore, body: '5 minutes remaining' },
-          { time: atStart, body: 'Starting now!' }
-        ];
-
-        for (const { time, body } of times) {
-          if (time.getTime() > now.getTime()) {
-            notifications.push({
-              id: notificationId++,
-              title: lecture.name || 'Lecture Reminder',
-              body: `${body} - ${lecture.startTime}`,
-              schedule: { at: time },
-              sound: undefined,
-              attachments: undefined,
-              actionTypeId: '',
-              extra: { lectureId: lecture.id }
-            });
-          }
-        }
-      }
-    }
-
-    if (notifications.length > 0) {
-      await LocalNotifications.schedule({ notifications });
-    }
-  } catch (e) {
-    console.log('Capacitor notifications not available, using web fallback');
-  }
-};
-
-// Send immediate notification
-const sendNotification = async (title: string, body: string) => {
-  // Try Capacitor first
-  try {
-    await LocalNotifications.schedule({
-      notifications: [{
-        id: Date.now(),
-        title,
-        body,
-        schedule: { at: new Date(Date.now() + 100) },
-        sound: undefined,
-        attachments: undefined,
-        actionTypeId: '',
-        extra: null
-      }]
-    });
-    return;
   } catch {
-    // Fall back to web notification
-    try {
-      new Notification(title, { body });
-    } catch {
-      // ignore
-    }
+    // ignore
   }
 };
 
@@ -222,7 +126,7 @@ export const testNotification = async () => {
     return false;
   }
   
-  await sendNotification(
+  sendNotification(
     'Test Notification',
     'This is a test notification with sound and vibration!'
   );
@@ -239,9 +143,6 @@ export const useLectureNotifications = (lectures: Lecture[]) => {
 
     let cancelled = false;
     const notified = new Set<string>();
-
-    // Schedule background notifications via Capacitor
-    scheduleCapacitorNotifications(lectures);
 
     const checkAndNotify = async () => {
       if (cancelled) return;
@@ -282,7 +183,7 @@ export const useLectureNotifications = (lectures: Lecture[]) => {
               body = `Starting now! - ${lecture.startTime}`;
             }
 
-            await sendNotification(title, body);
+            sendNotification(title, body);
             vibratePattern();
             playCustomAlarmTone();
           }
