@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X, FileDown, FileUp } from 'lucide-react';
+import { ArrowLeft, Facebook, Instagram, Globe, Download, Upload, Camera, Trash2, User, Save, Share2, Edit, X, FileDown, FileUp, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { loadLectures, saveLectures, loadProfileImage, saveProfileImage, deleteProfileImage, loadBackups, saveBackups } from '@/utils/storage';
 import { Backup, Lecture } from '@/types';
@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { LectureNotificationSettings, loadNotificationSettings, saveNotificationSettings } from '@/hooks/use-lecture-notifications';
+import { LectureNotificationSettings, loadNotificationSettings, saveNotificationSettings, testNotification, playCustomAlarmTone, vibratePattern } from '@/hooks/use-lecture-notifications';
 
 interface ConflictInfo {
   imported: Lecture;
@@ -69,6 +69,9 @@ const Settings: React.FC = () => {
   const [selectedBackup, setSelectedBackup] = React.useState<Backup | null>(null);
   const [editingBackupId, setEditingBackupId] = React.useState<string | null>(null);
   const [editingBackupName, setEditingBackupName] = React.useState('');
+  
+  // Backup options dialog
+  const [showBackupOptionsDialog, setShowBackupOptionsDialog] = React.useState(false);
   
   // Conflict handling
   const [showConflictsDialog, setShowConflictsDialog] = React.useState(false);
@@ -146,34 +149,57 @@ const Settings: React.FC = () => {
   };
 
   const handleExportWithChoice = async (includeAttachments: boolean) => {
+    toast.info(language === 'ar' ? 'جاري التصدير...' : 'Exporting...');
+    
+    // Use setTimeout to allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
     const lectures = loadLectures();
-    let dataToExport = lectures.map((l: Lecture) => ({ ...l }));
+    const blobParts: BlobPart[] = ['['];
 
     if (!includeAttachments) {
-      dataToExport = dataToExport.map((l: any) => ({ ...l, attachments: [] }));
+      // Fast export without attachments
+      lectures.forEach((lec: any, index: number) => {
+        const lecWithoutAttachments = { ...lec, attachments: [] };
+        blobParts.push(JSON.stringify(lecWithoutAttachments));
+        if (index < lectures.length - 1) blobParts.push(',');
+      });
     } else {
+      // Export with attachments - process one by one to avoid memory spikes
       const { getAttachmentAsDataURL } = await import('@/utils/idb');
-      await Promise.all(dataToExport.map(async (lec: any) => {
+      
+      for (let i = 0; i < lectures.length; i++) {
+        const lec = { ...lectures[i] };
+        
         if (lec.attachments && lec.attachments.length) {
-          const transformed = await Promise.all(lec.attachments.map(async (att: any) => {
+          const transformedAtts: any[] = [];
+          for (const att of lec.attachments) {
             if (att.id) {
-              const dataUrl = await getAttachmentAsDataURL(att.id);
-              return dataUrl ? { ...att, data: dataUrl } : null;
+              try {
+                const dataUrl = await getAttachmentAsDataURL(att.id);
+                if (dataUrl) {
+                  transformedAtts.push({ ...att, data: dataUrl });
+                }
+              } catch {
+                // Skip failed attachments
+              }
+            } else if (att.data) {
+              transformedAtts.push(att);
             }
-            return att.data ? att : null;
-          }));
-          lec.attachments = transformed.filter(Boolean) as any;
+          }
+          lec.attachments = transformedAtts;
         }
-      }));
+        
+        blobParts.push(JSON.stringify(lec));
+        if (i < lectures.length - 1) blobParts.push(',');
+        
+        // Allow UI to breathe every few lectures
+        if (i % 3 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
     }
 
-    // Build JSON in chunks to reduce memory spikes for very large exports
-    const blobParts: BlobPart[] = ['['];
-    dataToExport.forEach((lec: any, index: number) => {
-      const json = JSON.stringify(lec);
-      blobParts.push(json);
-      if (index < dataToExport.length - 1) blobParts.push(',');
-    });
     blobParts.push(']');
 
     const blob = new Blob(blobParts, { type: 'application/json' });
@@ -464,24 +490,50 @@ const Settings: React.FC = () => {
     }
   };
 
-  const createBackup = () => {
+  const handleCreateBackupClick = () => {
     if (backups.length >= 3) {
       toast.error(t('maxBackupsReached'));
       return;
     }
+    setShowBackupOptionsDialog(true);
+  };
 
+  const createBackup = async (includeAttachments: boolean) => {
+    setShowBackupOptionsDialog(false);
+    
     const lectures = loadLectures();
+    let backupLectures = lectures.map((l: Lecture) => ({ ...l }));
+
+    if (includeAttachments) {
+      toast.info(language === 'ar' ? 'جاري إنشاء النسخة مع المرفقات...' : 'Creating backup with attachments...');
+      const { getAttachmentAsDataURL } = await import('@/utils/idb');
+      await Promise.all(backupLectures.map(async (lec: any) => {
+        if (lec.attachments && lec.attachments.length) {
+          const transformed = await Promise.all(lec.attachments.map(async (att: any) => {
+            if (att.id) {
+              const dataUrl = await getAttachmentAsDataURL(att.id);
+              return dataUrl ? { ...att, data: dataUrl } : null;
+            }
+            return att.data ? att : null;
+          }));
+          lec.attachments = transformed.filter(Boolean);
+        }
+      }));
+    } else {
+      backupLectures = backupLectures.map((l: any) => ({ ...l, attachments: [] }));
+    }
+
     const newBackup: Backup = {
       id: Date.now().toString(),
-      name: `${t('language') === 'ar' ? 'نسخة احتياطية' : 'Backup'} ${backups.length + 1}`,
+      name: `${language === 'ar' ? 'نسخة احتياطية' : 'Backup'} ${backups.length + 1}`,
       date: new Date().toISOString(),
-      lectures,
+      lectures: backupLectures,
     };
 
     const updatedBackups = [...backups, newBackup];
     setBackups(updatedBackups);
     saveBackups(updatedBackups);
-    toast.success(t('language') === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created');
+    toast.success(language === 'ar' ? 'تم إنشاء النسخة الاحتياطية' : 'Backup created');
   };
 
   const applyBackup = (backup: Backup) => {
@@ -668,7 +720,7 @@ const Settings: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="lecture-notifications" className="text-sm sm:text-base">
-                  {language === 'ar' ? 'تنبيه قبل المحاضرة بـ 10 دقائق' : 'Notify 10 minutes before lecture'}
+                  {language === 'ar' ? 'تفعيل التنبيهات' : 'Enable Notifications'}
                 </Label>
                 <Switch
                   id="lecture-notifications"
@@ -678,9 +730,25 @@ const Settings: React.FC = () => {
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {language === 'ar'
-                  ? 'يتم تشغيل نغمة منبه مخصصة مع اهتزاز متتالي قبل بداية المحاضرة بـ 10 دقائق أثناء فتح التطبيق.'
-                  : 'A custom gentle alarm tone with cascading vibration plays 10 minutes before the lecture while the app is open.'}
+                  ? 'يتم إرسال إشعار قبل المحاضرة بـ 10 دقائق و5 دقائق وعند بدء المحاضرة، مع نغمة منبه مخصصة (20 ثانية) واهتزاز متتالي. يعمل حتى عند إغلاق التطبيق.'
+                  : 'Notifications are sent 10 min, 5 min before, and at lecture start time with a custom 20-second alarm tone and cascading vibration. Works even when app is closed.'}
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={async () => {
+                  const success = await testNotification();
+                  if (success) {
+                    toast.success(language === 'ar' ? 'تم إرسال إشعار تجريبي' : 'Test notification sent');
+                  } else {
+                    toast.error(language === 'ar' ? 'يرجى السماح بالإشعارات' : 'Please allow notifications');
+                  }
+                }}
+              >
+                <Bell className="w-4 h-4 mr-2" />
+                {language === 'ar' ? 'اختبار الإشعار' : 'Test Notification'}
+              </Button>
             </CardContent>
           </Card>
 
@@ -690,7 +758,7 @@ const Settings: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                onClick={createBackup}
+                onClick={handleCreateBackupClick}
                 variant="outline"
                 className="w-full justify-start text-sm sm:text-base"
                 disabled={backups.length >= 3}
@@ -789,7 +857,7 @@ const Settings: React.FC = () => {
                 variant="outline"
                 className="w-full justify-start text-sm sm:text-base"
               >
-                <Download className="w-4 h-4 mr-2" />
+                <Upload className="w-4 h-4 mr-2" />
                 {t('exportData')}
               </Button>
               <Button
@@ -797,7 +865,7 @@ const Settings: React.FC = () => {
                 variant="outline"
                 className="w-full justify-start text-sm sm:text-base"
               >
-                <Upload className="w-4 h-4 mr-2" />
+                <Download className="w-4 h-4 mr-2" />
                 {t('importData')}
               </Button>
             </CardContent>
@@ -1118,6 +1186,35 @@ const Settings: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Backup Options Dialog */}
+      <Dialog open={showBackupOptionsDialog} onOpenChange={setShowBackupOptionsDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {language === 'ar' ? 'خيارات النسخة الاحتياطية' : 'Backup Options'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              onClick={() => createBackup(true)}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {language === 'ar' ? 'نسخة مع المرفقات' : 'Backup with attachments'}
+            </Button>
+            <Button
+              onClick={() => createBackup(false)}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {language === 'ar' ? 'نسخة بدون المرفقات (الجدول فقط)' : 'Backup without attachments (schedule only)'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
